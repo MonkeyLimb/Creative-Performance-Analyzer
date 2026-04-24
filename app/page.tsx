@@ -9,8 +9,7 @@ import {
   TierStatus,
 } from "@/lib/types";
 import { parseCsv } from "@/lib/csv";
-import { classify, summarize } from "@/lib/tiers";
-import { buildAdsManagerUrl } from "@/lib/ads-manager-url";
+import { classify } from "@/lib/tiers";
 import {
   loadAccount,
   loadThresholds,
@@ -22,19 +21,30 @@ import { Sidebar } from "@/components/Sidebar";
 import { EmptyState } from "@/components/EmptyState";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { CplChart } from "@/components/CplChart";
+import { CplChart, TopN } from "@/components/CplChart";
 import { SpendCplScatter } from "@/components/ScatterChart";
-import { CreativesTable } from "@/components/CreativesTable";
+import {
+  CreativesTable,
+  DeliveryFilter,
+} from "@/components/CreativesTable";
+import { InsightCallout } from "@/components/InsightCallout";
 
-const FILTERS: Array<TierStatus | "all"> = ["all", "winner", "watch", "cut", "new"];
+const TIER_FILTERS: Array<TierStatus | "all"> = [
+  "all",
+  "winner",
+  "watch",
+  "cut",
+];
+const DELIVERY_FILTERS: DeliveryFilter[] = ["all", "active", "inactive"];
 
 export default function DashboardPage() {
   const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
   const [account, setAccount] = useState<AdAccount>({ actId: "" });
   const [creatives, setCreatives] = useState<Creative[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TierStatus | "all">("all");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tierFilter, setTierFilter] = useState<TierStatus | "all">("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("all");
+  const [topN, setTopN] = useState<TopN>(10);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -60,67 +70,55 @@ export default function DashboardPage() {
     }
     setError(null);
     setCreatives(result.creatives);
-    setSelected(new Set());
   };
 
   const handleClear = () => {
     setCreatives(null);
     setError(null);
-    setSelected(new Set());
   };
 
-  const summary = useMemo(
-    () => (creatives ? summarize(creatives, thresholds) : []),
-    [creatives, thresholds],
-  );
+  const decorated = useMemo(() => {
+    if (!creatives) return [];
+    return creatives.map((c) => ({
+      creative: c,
+      status: classify(c, thresholds),
+    }));
+  }, [creatives, thresholds]);
 
-  const totals = useMemo(() => {
-    if (!creatives) return null;
-    const spend = creatives.reduce((s, c) => s + c.spend, 0);
-    const results = creatives.reduce((s, c) => s + c.results, 0);
+  const metrics = useMemo(() => {
+    if (!creatives || creatives.length === 0) return null;
+    const totalSpend = creatives.reduce((s, c) => s + c.spend, 0);
+    const totalResults = creatives.reduce((s, c) => s + c.results, 0);
+    const blendedCpl = totalResults > 0 ? totalSpend / totalResults : null;
+    const winners = decorated
+      .filter((d) => d.status === "winner")
+      .map((d) => d.creative);
+    const cuts = decorated
+      .filter((d) => d.status === "cut")
+      .map((d) => d.creative);
+    const cutSpend = cuts.reduce((s, c) => s + c.spend, 0);
+    const winnerResults = winners.reduce((s, c) => s + c.results, 0);
+    const winnerShare =
+      totalResults > 0 ? (winnerResults / totalResults) * 100 : 0;
+    const activeCount = creatives.filter((c) => c.delivery === "active").length;
+    const topPerformer =
+      [...winners]
+        .filter((c) => c.cpl != null)
+        .sort((a, b) => (a.cpl as number) - (b.cpl as number))[0] ?? null;
     return {
-      spend,
-      results,
-      cpl: results > 0 ? spend / results : null,
-      count: creatives.length,
+      totalSpend,
+      totalResults,
+      blendedCpl,
+      winners,
+      cuts,
+      cutSpend,
+      winnerShare,
+      activeCount,
+      topPerformer,
     };
-  }, [creatives]);
+  }, [creatives, decorated]);
 
   const hasAdIds = !!creatives?.some((c) => c.adId);
-
-  const toggleSelect = (key: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const toggleAll = (keys: string[]) => {
-    setSelected((prev) => {
-      const allOn = keys.every((k) => prev.has(k));
-      const next = new Set(prev);
-      if (allOn) keys.forEach((k) => next.delete(k));
-      else keys.forEach((k) => next.add(k));
-      return next;
-    });
-  };
-
-  const openInAdsManager = () => {
-    if (!creatives || selected.size === 0 || !account.actId) return;
-    const picked = creatives.filter(
-      (c) => selected.has(c.adId || c.adName),
-    );
-    const adNames = picked.map((c) => c.adName);
-    const adIds = picked.map((c) => c.adId).filter((v): v is string => !!v);
-    const url = buildAdsManagerUrl({
-      account,
-      adNames,
-      adIds: adIds.length > 0 ? adIds : undefined,
-    });
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
 
   return (
     <div className="flex">
@@ -129,76 +127,87 @@ export default function DashboardPage() {
         onThresholdsChange={setThresholds}
         account={account}
         onAccountChange={setAccount}
+        topN={topN}
+        onTopNChange={setTopN}
         onClearData={handleClear}
         hasData={!!creatives}
+        hasAdIds={hasAdIds}
+        creativesCount={creatives?.length ?? 0}
       />
 
       <main className="flex-1 min-w-0">
-        {!creatives ? (
+        {!creatives || !metrics ? (
           <EmptyState onLoad={handleLoad} error={error} />
         ) : (
-          <div className="p-8 flex flex-col gap-6 max-w-[1400px]">
-            <header className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">
-                  Dashboard
-                </h1>
-                <p className="text-sm text-textDim mt-0.5">
-                  {totals?.count} creatives ·{" "}
-                  <span className="font-mono">
-                    {fmtCurrency(totals?.spend)}
-                  </span>{" "}
-                  spend ·{" "}
-                  <span className="font-mono">
-                    {fmtNumber(totals?.results)}
-                  </span>{" "}
-                  results
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={openInAdsManager}
-                  disabled={selected.size === 0 || !account.actId}
-                  title={
-                    !account.actId
-                      ? "Set Ad account ID in the sidebar"
-                      : selected.size === 0
-                      ? "Select creatives in the table"
-                      : undefined
-                  }
-                  className="bg-accent hover:bg-accent/80 disabled:bg-surface2 disabled:text-textDim disabled:cursor-not-allowed text-white rounded px-3 py-1.5 text-sm transition-colors"
-                >
-                  Open {selected.size || ""} in Ads Manager →
-                </button>
-              </div>
+          <div className="p-6 flex flex-col gap-5 max-w-[1400px]">
+            <header>
+              <h1 className="text-xl font-semibold tracking-tight">
+                Dashboard
+              </h1>
+              <p className="text-sm text-textDim mt-0.5">
+                {creatives.length} creative
+                {creatives.length === 1 ? "" : "s"} ·{" "}
+                <span className="font-mono">
+                  {fmtCurrency(metrics.totalSpend)}
+                </span>{" "}
+                spend ·{" "}
+                <span className="font-mono">
+                  {fmtNumber(metrics.totalResults)}
+                </span>{" "}
+                leads
+              </p>
             </header>
 
-            <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MetricCard
                 label="Total spend"
-                value={fmtCurrency(totals?.spend)}
+                value={fmtCurrency(metrics.totalSpend)}
               />
               <MetricCard
-                label="Overall CPL"
-                value={fmtCurrency(totals?.cpl)}
+                label="Total leads"
+                value={fmtNumber(metrics.totalResults)}
+              />
+              <MetricCard
+                label="Blended CPL"
+                value={fmtCurrency(metrics.blendedCpl)}
                 hint={`Target ${fmtCurrency(thresholds.targetCpl)}`}
               />
-              {summary
-                .filter((s) => s.status !== "new")
-                .map((s) => (
-                  <MetricCard
-                    key={s.status}
-                    label={`${titleCase(s.status)} · ${s.count}`}
-                    value={fmtCurrency(s.cpl)}
-                    hint={`${fmtCurrency(s.spend)} spend`}
-                    accent={STATUS_COLOR[s.status]}
-                  />
-                ))}
+              <MetricCard
+                label="Winners"
+                value={fmtNumber(metrics.winners.length)}
+                hint={`${creatives.length} total`}
+                accent="#1D9E75"
+              />
+              <MetricCard
+                label="Cut list"
+                value={fmtNumber(metrics.cuts.length)}
+                hint={`${fmtCurrency(metrics.cutSpend)} wasted`}
+                accent="#E24B4A"
+              />
+              <MetricCard
+                label="Active now"
+                value={fmtNumber(metrics.activeCount)}
+                hint="Currently delivering"
+              />
             </section>
 
+            <InsightCallout
+              topPerformer={metrics.topPerformer}
+              cuts={metrics.cuts}
+              cutSpend={metrics.cutSpend}
+              winnerShare={metrics.winnerShare}
+              hasAnyLeads={metrics.totalResults > 0}
+            />
+
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <Panel title="CPL by creative (lowest 30)">
-                <CplChart creatives={creatives} thresholds={thresholds} />
+              <Panel
+                title={`CPL by creative (top ${topN === "all" ? "all" : topN})`}
+              >
+                <CplChart
+                  creatives={creatives}
+                  thresholds={thresholds}
+                  topN={topN}
+                />
               </Panel>
               <Panel title="Spend vs CPL">
                 <SpendCplScatter
@@ -209,40 +218,38 @@ export default function DashboardPage() {
             </section>
 
             <section className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-1.5">
-                  {FILTERS.map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setFilter(f)}
-                      className={`px-3 py-1 rounded text-xs transition-colors ${
-                        filter === f
-                          ? "bg-surface2 text-text border border-border"
-                          : "text-textDim hover:text-text border border-transparent"
-                      }`}
-                    >
-                      {f === "all" ? (
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="text-xs uppercase tracking-wider text-textDim">
+                  All creatives · {creatives.length}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <PillGroup
+                    options={DELIVERY_FILTERS}
+                    active={deliveryFilter}
+                    onChange={setDeliveryFilter}
+                    render={(o) => capitalize(o)}
+                  />
+                  <PillGroup
+                    options={TIER_FILTERS}
+                    active={tierFilter}
+                    onChange={setTierFilter}
+                    render={(o) =>
+                      o === "all" ? (
                         "All"
                       ) : (
-                        <span className="flex items-center gap-1.5">
-                          <StatusBadge status={f} />
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <div className="text-xs text-textDim">
-                  {selected.size > 0 && `${selected.size} selected`}
+                        <StatusBadge status={o as TierStatus} />
+                      )
+                    }
+                  />
                 </div>
               </div>
 
               <CreativesTable
                 creatives={creatives}
                 thresholds={thresholds}
-                filter={filter}
-                selected={selected}
-                onToggleSelect={toggleSelect}
-                onToggleAll={toggleAll}
+                filter={tierFilter}
+                deliveryFilter={deliveryFilter}
+                account={account}
                 hasAdIds={hasAdIds}
               />
             </section>
@@ -270,13 +277,36 @@ function Panel({
   );
 }
 
-function titleCase(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function PillGroup<T extends string>({
+  options,
+  active,
+  onChange,
+  render,
+}: {
+  options: readonly T[];
+  active: T;
+  onChange: (v: T) => void;
+  render: (o: T) => React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          onClick={() => onChange(opt)}
+          className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            active === opt
+              ? "bg-surface2 text-text border border-border"
+              : "text-textDim hover:text-text border border-transparent"
+          }`}
+        >
+          {render(opt)}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-const STATUS_COLOR: Record<TierStatus, string> = {
-  winner: "#1D9E75",
-  watch: "#EF9F27",
-  cut: "#E24B4A",
-  new: "#8a8a92",
-};
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

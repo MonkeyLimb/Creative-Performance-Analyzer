@@ -21,65 +21,91 @@ const STATUS_COLOR: Record<string, string> = {
   new: "#3a3a3f",
 };
 
+export type TopN = 5 | 10 | 20 | "all";
+
 type Props = {
   creatives: Creative[];
   thresholds: Thresholds;
+  topN?: TopN;
 };
 
-export function CplChart({ creatives, thresholds }: Props) {
-  const data = creatives
+export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
+  const sorted = creatives
     .filter((c) => c.cpl != null)
-    .map((c) => ({
-      name: truncate(c.adName, 28),
-      cpl: c.cpl as number,
-      status: classify(c, thresholds),
-    }))
-    .sort((a, b) => a.cpl - b.cpl)
-    .slice(0, 30);
+    .sort((a, b) => (a.cpl as number) - (b.cpl as number));
+
+  const limited = topN === "all" ? sorted : sorted.slice(0, topN);
+  const prefix = commonPrefix(limited.map((c) => c.adName));
+
+  const data = limited.map((c) => ({
+    name: smartTruncate(c.adName, prefix, 32),
+    fullName: c.adName,
+    cpl: Number((c.cpl as number).toFixed(2)),
+    status: classify(c, thresholds),
+  }));
 
   if (data.length === 0) {
-    return <EmptyState label="No CPL data yet" />;
+    return (
+      <div className="h-80 flex items-center justify-center text-sm text-textDim">
+        No CPL data yet
+      </div>
+    );
   }
 
+  const height = Math.max(280, data.length * 28);
+
   return (
-    <div className="h-80">
+    <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid stroke="#2a2a2e" vertical={false} />
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 24, left: 4, bottom: 4 }}
+        >
+          <CartesianGrid stroke="#2a2a2e" horizontal={false} />
           <XAxis
-            dataKey="name"
+            type="number"
             tick={{ fill: "#8a8a92", fontSize: 10 }}
-            interval={0}
-            angle={-35}
-            textAnchor="end"
-            height={80}
-          />
-          <YAxis
-            tick={{ fill: "#8a8a92", fontSize: 11 }}
             tickFormatter={(v) => `$${v}`}
           />
+          <YAxis
+            type="category"
+            dataKey="name"
+            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            width={200}
+            interval={0}
+          />
           <Tooltip
-            contentStyle={{
-              backgroundColor: "#161618",
-              border: "1px solid #2a2a2e",
-              borderRadius: 6,
-              color: "#e8e8ea",
-              fontSize: 12,
+            cursor={{ fill: "rgba(107, 95, 255, 0.05)" }}
+            content={({ active, payload }) => {
+              if (!active || !payload || !payload.length) return null;
+              const p = payload[0].payload as {
+                fullName: string;
+                cpl: number;
+                status: string;
+              };
+              return (
+                <div className="bg-surface2 border border-border rounded px-2.5 py-1.5 text-xs max-w-xs">
+                  <div className="text-text break-all">{p.fullName}</div>
+                  <div className="font-mono text-textDim mt-0.5">
+                    CPL ${p.cpl.toFixed(2)}
+                  </div>
+                </div>
+              );
             }}
-            formatter={(value: number) => [`$${value.toFixed(2)}`, "CPL"]}
           />
           <ReferenceLine
-            y={thresholds.targetCpl}
+            x={thresholds.targetCpl}
             stroke="#6b5fff"
             strokeDasharray="4 4"
             label={{
               value: `Target $${thresholds.targetCpl}`,
               fill: "#6b5fff",
               fontSize: 10,
-              position: "right",
+              position: "top",
             }}
           />
-          <Bar dataKey="cpl" radius={[2, 2, 0, 0]}>
+          <Bar dataKey="cpl" radius={[0, 3, 3, 0]}>
             {data.map((entry, idx) => (
               <Cell key={idx} fill={STATUS_COLOR[entry.status]} />
             ))}
@@ -90,14 +116,24 @@ export function CplChart({ creatives, thresholds }: Props) {
   );
 }
 
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="h-80 flex items-center justify-center text-sm text-textDim">
-      {label}
-    </div>
-  );
+function commonPrefix(strings: string[]): string {
+  if (strings.length < 2) return "";
+  let prefix = strings[0];
+  for (let i = 1; i < strings.length; i++) {
+    while (prefix.length > 0 && !strings[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+    }
+    if (!prefix) return "";
+  }
+  return prefix;
 }
 
-function truncate(s: string, max: number): string {
+function smartTruncate(s: string, prefix: string, max: number): string {
+  if (prefix.length > 8 && s.length > max) {
+    const suffix = s.slice(prefix.length);
+    const budget = max - 1; // room for the leading ellipsis
+    if (suffix.length <= budget) return "…" + suffix;
+    return "…" + suffix.slice(-budget);
+  }
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
