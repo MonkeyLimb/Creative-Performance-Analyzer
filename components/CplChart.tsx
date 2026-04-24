@@ -18,7 +18,6 @@ const STATUS_COLOR: Record<string, string> = {
   winner: "#1D9E75",
   watch: "#EF9F27",
   cut: "#E24B4A",
-  new: "#3a3a3f",
 };
 
 export type TopN = 5 | 10 | 20 | "all";
@@ -95,12 +94,23 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
             }}
           />
           <ReferenceLine
-            x={thresholds.targetCpl}
-            stroke="#6b5fff"
+            x={thresholds.winnerCpl}
+            stroke="#1D9E75"
             strokeDasharray="4 4"
             label={{
-              value: `Target $${thresholds.targetCpl}`,
-              fill: "#6b5fff",
+              value: `Win ≤ $${thresholds.winnerCpl}`,
+              fill: "#1D9E75",
+              fontSize: 10,
+              position: "top",
+            }}
+          />
+          <ReferenceLine
+            x={thresholds.cutCpl}
+            stroke="#E24B4A"
+            strokeDasharray="4 4"
+            label={{
+              value: `Cut ≥ $${thresholds.cutCpl}`,
+              fill: "#E24B4A",
               fontSize: 10,
               position: "top",
             }}

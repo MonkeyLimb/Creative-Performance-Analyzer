@@ -31,70 +31,62 @@ export function Sidebar({
   const hasAccount = !!account.actId.trim();
 
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-surface p-5 flex flex-col gap-6 h-screen sticky top-0 overflow-y-auto">
-      <div>
+    <aside className="w-[280px] shrink-0 border-r border-border bg-surface px-5 py-5 flex flex-col h-screen sticky top-0 overflow-y-auto">
+      <div className="mb-4">
         <div className="text-sm font-semibold tracking-tight">
           Creative Performance
         </div>
-        <div className="text-xs text-textDim mt-0.5">Meta Ads analyzer</div>
+        <div className="text-[11px] text-textDim mt-0.5">
+          Meta Ads analyzer
+        </div>
       </div>
 
       <Section title="Ad account">
         <Field label="Account ID">
           <TextInput
-            placeholder="e.g. 123456789"
+            placeholder="e.g. 2968881040018079"
             value={account.actId}
             onChange={(v) => onAccountChange({ ...account, actId: v })}
           />
           <Hint>
             Needed for clickable rows. Find in Ads Manager URL as{" "}
-            <code className="font-mono text-textDim">?act=</code>.
+            <code className="font-mono">?act=</code>.
           </Hint>
         </Field>
         <Field label="Business ID (optional)">
           <TextInput
-            placeholder="—"
+            placeholder="e.g. 480923986526914"
             value={account.businessId ?? ""}
             onChange={(v) =>
               onAccountChange({ ...account, businessId: v || undefined })
             }
           />
+          <Hint>
+            From URL as <code className="font-mono">business_id=</code>. Helps
+            if you manage multiple businesses.
+          </Hint>
         </Field>
       </Section>
 
       <Section title="Thresholds">
-        <Field label="Target CPL">
+        <Field label="Winner CPL ≤">
           <NumberInput
-            value={thresholds.targetCpl}
-            onChange={(v) => onThresholdsChange({ ...thresholds, targetCpl: v })}
-            prefix="$"
-          />
-        </Field>
-        <Field label="Winner ratio">
-          <NumberInput
-            value={thresholds.winnerMultiplier}
-            step={0.05}
+            value={thresholds.winnerCpl}
             onChange={(v) =>
-              onThresholdsChange({ ...thresholds, winnerMultiplier: v })
+              onThresholdsChange({ ...thresholds, winnerCpl: v })
             }
-            suffix="×"
-          />
-        </Field>
-        <Field label="Cut ratio">
-          <NumberInput
-            value={thresholds.cutMultiplier}
-            step={0.05}
-            onChange={(v) =>
-              onThresholdsChange({ ...thresholds, cutMultiplier: v })
-            }
-            suffix="×"
-          />
-        </Field>
-        <Field label="Min spend">
-          <NumberInput
-            value={thresholds.minSpend}
-            onChange={(v) => onThresholdsChange({ ...thresholds, minSpend: v })}
             prefix="$"
+            min={0}
+          />
+        </Field>
+        <Field label="Cut CPL ≥">
+          <NumberInput
+            value={thresholds.cutCpl}
+            onChange={(v) =>
+              onThresholdsChange({ ...thresholds, cutCpl: v })
+            }
+            prefix="$"
+            min={0}
           />
         </Field>
       </Section>
@@ -107,7 +99,7 @@ export function Sidebar({
               const v = e.target.value;
               onTopNChange(v === "all" ? "all" : (Number(v) as TopN));
             }}
-            className="w-full bg-surface2 border border-border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent cursor-pointer"
+            className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent cursor-pointer"
           >
             <option value="5">5</option>
             <option value="10">10</option>
@@ -117,31 +109,29 @@ export function Sidebar({
         </Field>
       </Section>
 
-      <div className="mt-auto flex flex-col gap-3">
+      <div className="mt-auto pt-4">
         {hasData && (
-          <div className="text-xs text-textDim border-t border-border pt-3 leading-relaxed">
+          <div className="text-[11px] text-textDim border-t border-border pt-3 leading-relaxed flex flex-col gap-1">
             <div>
               {creativesCount} creative{creativesCount === 1 ? "" : "s"} loaded
             </div>
             <div>
               Links:{" "}
               {!hasAccount ? (
-                <span className="text-watch">add account ID</span>
+                <span className="text-watch">add Account ID</span>
               ) : hasAdIds ? (
                 <span className="text-winner">precise (Ad ID)</span>
               ) : (
                 <span className="text-watch">name search</span>
               )}
             </div>
+            <button
+              className="text-left text-textDim hover:text-cut transition-colors mt-2"
+              onClick={onClearData}
+            >
+              Clear loaded CSV
+            </button>
           </div>
-        )}
-        {hasData && (
-          <button
-            className="w-full text-xs text-textDim hover:text-cut transition-colors py-2"
-            onClick={onClearData}
-          >
-            Clear loaded CSV
-          </button>
         )}
       </div>
     </aside>
@@ -156,8 +146,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="text-xs uppercase tracking-wider text-textDim mb-3">
+    <div className="mt-4 first:mt-0">
+      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
         {title}
       </div>
       <div className="flex flex-col gap-3">{children}</div>
@@ -173,8 +163,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-textDim">{label}</span>
+    <label className="flex flex-col gap-2">
+      <span className="text-[11px] uppercase tracking-[0.05em] text-textDim">
+        {label}
+      </span>
       {children}
     </label>
   );
@@ -182,7 +174,9 @@ function Field({
 
 function Hint({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[10px] text-textDim leading-snug">{children}</span>
+    <span className="text-[10px] text-textDim leading-[1.4] mt-0.5">
+      {children}
+    </span>
   );
 }
 
@@ -190,39 +184,33 @@ function NumberInput({
   value,
   onChange,
   prefix,
-  suffix,
-  step = 1,
+  min,
 }: {
   value: number;
   onChange: (v: number) => void;
   prefix?: string;
-  suffix?: string;
-  step?: number;
+  min?: number;
 }) {
   return (
     <div className="relative">
       {prefix && (
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-textDim text-sm font-mono">
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-textDim text-[13px] font-mono pointer-events-none">
           {prefix}
         </span>
       )}
       <input
         type="number"
-        step={step}
-        value={value}
+        inputMode="decimal"
+        min={min}
+        value={Number.isFinite(value) ? value : ""}
         onChange={(e) => {
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onChange(n);
         }}
-        className={`w-full bg-surface2 border border-border rounded px-2 py-1.5 text-sm font-mono tabular-nums focus:outline-none focus:border-accent ${
-          prefix ? "pl-6" : ""
-        } ${suffix ? "pr-6" : ""}`}
+        className={`w-full bg-surface2 border border-border rounded-md py-2 text-[13px] font-mono tabular-nums focus:outline-none focus:border-accent ${
+          prefix ? "pl-6 pr-2.5" : "px-2.5"
+        }`}
       />
-      {suffix && (
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-textDim text-sm font-mono">
-          {suffix}
-        </span>
-      )}
     </div>
   );
 }
@@ -242,7 +230,7 @@ function TextInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-surface2 border border-border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent"
+      className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent"
     />
   );
 }

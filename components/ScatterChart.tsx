@@ -18,7 +18,6 @@ const STATUS_COLOR: Record<TierStatus, string> = {
   winner: "#1D9E75",
   watch: "#EF9F27",
   cut: "#E24B4A",
-  new: "#3a3a3f",
 };
 
 type Props = {
@@ -31,13 +30,13 @@ export function SpendCplScatter({ creatives, thresholds }: Props) {
     winner: [],
     watch: [],
     cut: [],
-    new: [],
   };
 
   for (const c of creatives) {
-    if (c.cpl == null || c.spend <= 0) continue;
+    if (c.spend <= 0) continue;
     const status = classify(c, thresholds);
-    byStatus[status].push({ x: c.spend, y: c.cpl, name: c.adName });
+    const cpl = c.cpl ?? 0;
+    byStatus[status].push({ x: c.spend, y: cpl, name: c.adName });
   }
 
   const total = Object.values(byStatus).reduce((s, arr) => s + arr.length, 0);
@@ -101,8 +100,13 @@ export function SpendCplScatter({ creatives, thresholds }: Props) {
             }}
           />
           <ReferenceLine
-            y={thresholds.targetCpl}
-            stroke="#6b5fff"
+            y={thresholds.winnerCpl}
+            stroke="#1D9E75"
+            strokeDasharray="4 4"
+          />
+          <ReferenceLine
+            y={thresholds.cutCpl}
+            stroke="#E24B4A"
             strokeDasharray="4 4"
           />
           {(Object.keys(byStatus) as TierStatus[]).map((status) => (

@@ -5,6 +5,7 @@ type Props = {
   topPerformer: Creative | null;
   cuts: Creative[];
   cutSpend: number;
+  cutCpl: number;
   winnerShare: number;
   hasAnyLeads: boolean;
 };
@@ -13,6 +14,7 @@ export function InsightCallout({
   topPerformer,
   cuts,
   cutSpend,
+  cutCpl,
   winnerShare,
   hasAnyLeads,
 }: Props) {
@@ -31,7 +33,8 @@ export function InsightCallout({
       <Shell>
         <strong className="text-cut">{cuts.length}</strong> creative
         {cuts.length === 1 ? " is" : "s are"} burning{" "}
-        <span className="font-mono">{fmtCurrency(cutSpend)}</span> at high CPL.
+        <span className="font-mono tabular-nums">{fmtCurrency(cutSpend)}</span>{" "}
+        at high CPL.
       </Shell>
     );
   }
@@ -40,10 +43,14 @@ export function InsightCallout({
     <Shell>
       Top performer:{" "}
       <strong className="text-winner">{topPerformer.adName}</strong> at{" "}
-      <span className="font-mono">{fmtCurrency(topPerformer.cpl)}</span> CPL.{" "}
-      Pause <strong className="text-cut">{cuts.length}</strong> creative
-      {cuts.length === 1 ? "" : "s"} burning{" "}
-      <span className="font-mono">{fmtCurrency(cutSpend)}</span>. Winners drive{" "}
+      <span className="font-mono tabular-nums">
+        {fmtCurrency(topPerformer.cpl)}
+      </span>{" "}
+      CPL. Pause <strong className="text-cut">{cuts.length}</strong> creative
+      {cuts.length === 1 ? "" : "s"} (
+      <span className="font-mono tabular-nums">{fmtCurrency(cutSpend)}</span>{" "}
+      spent, 0 leads or CPL ≥{" "}
+      <span className="font-mono tabular-nums">${cutCpl}</span>). Winners drive{" "}
       <strong className="text-winner">{winnerShare.toFixed(1)}%</strong> of
       leads.
     </Shell>
@@ -52,7 +59,7 @@ export function InsightCallout({
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-surface border border-border border-l-[3px] border-l-accent rounded-lg px-4 py-3 text-sm leading-relaxed">
+    <div className="bg-surface border border-border border-l-[3px] border-l-accent rounded-lg px-[18px] py-3.5 text-[13px] leading-[1.6]">
       {children}
     </div>
   );
