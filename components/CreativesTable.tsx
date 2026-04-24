@@ -32,14 +32,12 @@ const STATUS_RANK: Record<TierStatus, number> = {
   cut: 0,
   watch: 1,
   winner: 2,
-  new: 3,
 };
 
 const STATUS_COLOR: Record<TierStatus, string> = {
   winner: "#1D9E75",
   watch: "#EF9F27",
   cut: "#E24B4A",
-  new: "#8a8a92",
 };
 
 export function CreativesTable({

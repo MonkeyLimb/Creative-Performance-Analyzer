@@ -170,7 +170,6 @@ export default function DashboardPage() {
               <MetricCard
                 label="Blended CPL"
                 value={fmtCurrency(metrics.blendedCpl)}
-                hint={`Target ${fmtCurrency(thresholds.targetCpl)}`}
               />
               <MetricCard
                 label="Winners"
@@ -195,6 +194,7 @@ export default function DashboardPage() {
               topPerformer={metrics.topPerformer}
               cuts={metrics.cuts}
               cutSpend={metrics.cutSpend}
+              cutCpl={thresholds.cutCpl}
               winnerShare={metrics.winnerShare}
               hasAnyLeads={metrics.totalResults > 0}
             />

@@ -15,7 +15,7 @@ export type QualityRanking =
   | "below_average_10"
   | "unknown";
 
-export type TierStatus = "winner" | "watch" | "cut" | "new";
+export type TierStatus = "winner" | "watch" | "cut";
 
 export type Creative = {
   adName: string;
@@ -38,17 +38,13 @@ export type Creative = {
 };
 
 export type Thresholds = {
-  targetCpl: number;
-  winnerMultiplier: number;
-  cutMultiplier: number;
-  minSpend: number;
+  winnerCpl: number;
+  cutCpl: number;
 };
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
-  targetCpl: 50,
-  winnerMultiplier: 0.7,
-  cutMultiplier: 1.3,
-  minSpend: 100,
+  winnerCpl: 20,
+  cutCpl: 50,
 };
 
 export type AdAccount = {

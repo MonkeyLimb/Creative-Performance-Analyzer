@@ -1,10 +1,10 @@
 import { Creative, TierStatus, Thresholds } from "./types";
 
 export function classify(c: Creative, t: Thresholds): TierStatus {
-  if (c.spend < t.minSpend) return "new";
-  if (c.cpl == null) return "new";
-  if (c.cpl <= t.targetCpl * t.winnerMultiplier) return "winner";
-  if (c.cpl >= t.targetCpl * t.cutMultiplier) return "cut";
+  if (c.spend > 0 && c.results === 0) return "cut";
+  if (c.cpl == null) return "watch";
+  if (c.cpl <= t.winnerCpl) return "winner";
+  if (c.cpl >= t.cutCpl) return "cut";
   return "watch";
 }
 
@@ -35,12 +35,11 @@ export function summarize(
   creatives: Creative[],
   t: Thresholds,
 ): TierSummary[] {
-  const order: TierStatus[] = ["winner", "watch", "cut", "new"];
+  const order: TierStatus[] = ["winner", "watch", "cut"];
   const buckets: Record<TierStatus, Creative[]> = {
     winner: [],
     watch: [],
     cut: [],
-    new: [],
   };
   for (const c of creatives) buckets[classify(c, t)].push(c);
   return order.map((status) => {

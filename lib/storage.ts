@@ -1,7 +1,7 @@
 import { AdAccount, DEFAULT_THRESHOLDS, Thresholds } from "./types";
 
 const KEYS = {
-  thresholds: "cpa.thresholds.v1",
+  thresholds: "cpa.thresholds.v2",
   account: "cpa.account.v1",
 } as const;
 
