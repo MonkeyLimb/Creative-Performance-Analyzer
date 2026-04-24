@@ -16,20 +16,19 @@ describe("normalizeActId", () => {
 
 describe("encodeAdNameFilter", () => {
   it("matches the documented double-JSON encoding for one name", () => {
-    const expected = encodeURIComponent('"[\\"AD_NAME\\"]"');
-    expect(encodeAdNameFilter(["AD_NAME"])).toBe(expected);
+    expect(encodeAdNameFilter(["AD_NAME"])).toBe('"[\\"AD_NAME\\"]"');
   });
 
   it("encodes multiple names", () => {
     const out = encodeAdNameFilter(["A", "B"]);
-    const decoded = JSON.parse(JSON.parse(decodeURIComponent(out)));
+    const decoded = JSON.parse(JSON.parse(out));
     expect(decoded).toEqual(["A", "B"]);
   });
 
   it("safely encodes names with quotes and commas", () => {
     const tricky = 'Hero "Spring", v2';
     const out = encodeAdNameFilter([tricky]);
-    const decoded = JSON.parse(JSON.parse(decodeURIComponent(out)));
+    const decoded = JSON.parse(JSON.parse(out));
     expect(decoded).toEqual([tricky]);
   });
 });
@@ -83,5 +82,20 @@ describe("buildAdsManagerUrl", () => {
     expect(() =>
       buildAdsManagerUrl({ account: { actId: "act_123" }, adNames: [] }),
     ).toThrow();
+  });
+
+  it("url-encodes the filter_set value exactly once", () => {
+    const url = buildAdsManagerUrl({
+      account: { actId: "act_123" },
+      adNames: ["Hero Spring"],
+    });
+    const filterSet = new URL(url).searchParams.get("filter_set");
+    expect(filterSet).toBe(
+      'SEARCH_BY_AD_NAME-STRING-EQUAL-"[\\"Hero Spring\\"]"',
+    );
+    expect(JSON.parse(JSON.parse(filterSet!.replace(
+      "SEARCH_BY_AD_NAME-STRING-EQUAL-",
+      "",
+    )))).toEqual(["Hero Spring"]);
   });
 });
