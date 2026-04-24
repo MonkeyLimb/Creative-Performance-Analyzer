@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeEvent, useRef } from "react";
 import { AdAccount, Thresholds } from "@/lib/types";
 import { TopN } from "./CplChart";
 
@@ -10,6 +11,10 @@ type Props = {
   onAccountChange: (a: AdAccount) => void;
   topN: TopN;
   onTopNChange: (t: TopN) => void;
+  csvText: string;
+  onCsvTextChange: (t: string) => void;
+  onAnalyze: () => void;
+  parseError: string | null;
   onClearData: () => void;
   hasData: boolean;
   hasAdIds: boolean;
@@ -23,12 +28,29 @@ export function Sidebar({
   onAccountChange,
   topN,
   onTopNChange,
+  csvText,
+  onCsvTextChange,
+  onAnalyze,
+  parseError,
   onClearData,
   hasData,
   hasAdIds,
   creativesCount,
 }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
   const hasAccount = !!account.actId.trim();
+
+  const onFilePick = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === "string" ? reader.result : "";
+      if (text) onCsvTextChange(text);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   return (
     <aside className="w-[280px] shrink-0 border-r border-border bg-surface px-5 py-5 flex flex-col h-screen sticky top-0 overflow-y-auto">
@@ -62,10 +84,42 @@ export function Sidebar({
             }
           />
           <Hint>
-            From URL as <code className="font-mono">business_id=</code>. Helps
-            if you manage multiple businesses.
+            Find as <code className="font-mono">business_id=</code> in URL.
+            Helps if you manage multiple businesses.
           </Hint>
         </Field>
+      </Section>
+
+      <Section
+        title="CSV export"
+        action={
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="text-[10px] uppercase tracking-[0.05em] text-accent hover:text-accent/80 font-semibold"
+          >
+            Upload file
+          </button>
+        }
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          hidden
+          onChange={onFilePick}
+        />
+        <textarea
+          value={csvText}
+          onChange={(e) => onCsvTextChange(e.target.value)}
+          placeholder="Paste Meta Ads Manager CSV here…"
+          spellCheck={false}
+          className="w-full h-[120px] bg-surface2 border border-border rounded-md px-2.5 py-2 text-[11px] font-mono leading-[1.4] resize-y focus:outline-none focus:border-accent"
+        />
+        <Hint>
+          Include <code className="font-mono">Ad ID</code> column (Customize
+          Columns → Identification) for precise links.
+        </Hint>
       </Section>
 
       <Section title="Thresholds">
@@ -109,8 +163,22 @@ export function Sidebar({
         </Field>
       </Section>
 
-      <div className="mt-auto pt-4">
-        {hasData && (
+      <button
+        onClick={onAnalyze}
+        disabled={!csvText.trim()}
+        className="mt-4 w-full bg-accent hover:bg-accent/85 disabled:bg-surface2 disabled:text-textDim disabled:cursor-not-allowed text-white rounded-md py-[11px] text-[13px] font-semibold transition-colors"
+      >
+        Analyze
+      </button>
+
+      {parseError && (
+        <div className="mt-3 text-[11px] text-cut bg-cut/10 border border-cut/30 rounded-md px-2.5 py-2 leading-[1.4]">
+          {parseError}
+        </div>
+      )}
+
+      {hasData && (
+        <div className="mt-auto pt-4">
           <div className="text-[11px] text-textDim border-t border-border pt-3 leading-relaxed flex flex-col gap-1">
             <div>
               {creativesCount} creative{creativesCount === 1 ? "" : "s"} loaded
@@ -132,23 +200,28 @@ export function Sidebar({
               Clear loaded CSV
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }
 
 function Section({
   title,
+  action,
   children,
 }: {
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="mt-4 first:mt-0">
-      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
-        {title}
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[11px] uppercase tracking-[0.05em] text-textDim">
+          {title}
+        </div>
+        {action}
       </div>
       <div className="flex flex-col gap-3">{children}</div>
     </div>

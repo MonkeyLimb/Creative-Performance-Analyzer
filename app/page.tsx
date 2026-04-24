@@ -17,6 +17,7 @@ import {
   saveThresholds,
 } from "@/lib/storage";
 import { fmtCurrency, fmtNumber } from "@/lib/format";
+import { SAMPLE_CSV } from "@/lib/sample-csv";
 import { Sidebar } from "@/components/Sidebar";
 import { EmptyState } from "@/components/EmptyState";
 import { MetricCard } from "@/components/MetricCard";
@@ -40,8 +41,9 @@ const DELIVERY_FILTERS: DeliveryFilter[] = ["all", "active", "inactive"];
 export default function DashboardPage() {
   const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
   const [account, setAccount] = useState<AdAccount>({ actId: "" });
+  const [csvText, setCsvText] = useState<string>(SAMPLE_CSV);
   const [creatives, setCreatives] = useState<Creative[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [tierFilter, setTierFilter] = useState<TierStatus | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("all");
   const [topN, setTopN] = useState<TopN>(10);
@@ -62,19 +64,24 @@ export default function DashboardPage() {
     if (hydrated) saveAccount(account);
   }, [account, hydrated]);
 
-  const handleLoad = (text: string) => {
-    const result = parseCsv(text);
-    if (!result.ok) {
-      setError(result.error);
+  const handleAnalyze = () => {
+    if (!csvText.trim()) {
+      setParseError("Paste CSV data or upload a file first.");
       return;
     }
-    setError(null);
+    const result = parseCsv(csvText);
+    if (!result.ok) {
+      setParseError(result.error);
+      setCreatives(null);
+      return;
+    }
+    setParseError(null);
     setCreatives(result.creatives);
   };
 
   const handleClear = () => {
     setCreatives(null);
-    setError(null);
+    setParseError(null);
   };
 
   const decorated = useMemo(() => {
@@ -129,6 +136,10 @@ export default function DashboardPage() {
         onAccountChange={setAccount}
         topN={topN}
         onTopNChange={setTopN}
+        csvText={csvText}
+        onCsvTextChange={setCsvText}
+        onAnalyze={handleAnalyze}
+        parseError={parseError}
         onClearData={handleClear}
         hasData={!!creatives}
         hasAdIds={hasAdIds}
@@ -137,7 +148,7 @@ export default function DashboardPage() {
 
       <main className="flex-1 min-w-0">
         {!creatives || !metrics ? (
-          <EmptyState onLoad={handleLoad} error={error} />
+          <EmptyState />
         ) : (
           <div className="p-6 flex flex-col gap-5 max-w-[1400px]">
             <header>
@@ -147,11 +158,11 @@ export default function DashboardPage() {
               <p className="text-sm text-textDim mt-0.5">
                 {creatives.length} creative
                 {creatives.length === 1 ? "" : "s"} ·{" "}
-                <span className="font-mono">
+                <span className="font-mono tabular-nums">
                   {fmtCurrency(metrics.totalSpend)}
                 </span>{" "}
                 spend ·{" "}
-                <span className="font-mono">
+                <span className="font-mono tabular-nums">
                   {fmtNumber(metrics.totalResults)}
                 </span>{" "}
                 leads
@@ -268,8 +279,8 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-lg p-4">
-      <div className="text-xs uppercase tracking-wider text-textDim mb-3">
+    <div className="bg-surface border border-border rounded-lg p-[18px]">
+      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
         {title}
       </div>
       {children}
