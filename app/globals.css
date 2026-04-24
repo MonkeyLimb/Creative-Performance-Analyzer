@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background-color: #0e0e0f;
+  color: #e8e8ea;
+}
+
+body {
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+  background-color: #6b5fff;
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2e transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #2a2a2e;
+  border-radius: 5px;
+  border: 2px solid #0e0e0f;
+}
