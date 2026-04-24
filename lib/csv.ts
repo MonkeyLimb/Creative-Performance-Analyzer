@@ -105,7 +105,7 @@ function findRequiredColumns(header: string[]): ColumnMap {
     frequency: find("Frequency"),
     ctr: find("CTR (link click-through rate)", "CTR (all)", "CTR"),
     cpm: find("CPM (cost per 1,000 impressions)", "CPM"),
-    delivery: find("Delivery status", "Delivery"),
+    delivery: find("Delivery status", "Ad delivery", "Delivery"),
     quality: find("Quality ranking"),
     engagement: find("Engagement rate ranking"),
     conversion: find("Conversion rate ranking"),
@@ -166,6 +166,8 @@ function numOrNull(v: string | undefined): number | null {
 function parseDelivery(v: string): DeliveryStatus {
   const k = (v || "").toLowerCase().trim();
   if (!k) return "unknown";
+  if (k.includes("not_delivering") || k.includes("not delivering"))
+    return "inactive";
   if (k.includes("active")) return "active";
   if (k.includes("paused")) return "paused";
   if (k.includes("completed")) return "completed";
