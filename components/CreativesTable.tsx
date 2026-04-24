@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Creative, Thresholds, TierStatus } from "@/lib/types";
+import { AdAccount, Creative, Thresholds, TierStatus } from "@/lib/types";
 import { classify } from "@/lib/tiers";
+import { buildAdsManagerUrl } from "@/lib/ads-manager-url";
 import { fmtCurrency, fmtNumber, fmtPct } from "@/lib/format";
 import { StatusBadge } from "./StatusBadge";
 import { DeliveryBadge } from "./DeliveryBadge";
@@ -14,16 +15,16 @@ type SortKey =
   | "spend"
   | "results"
   | "cpl"
-  | "impressions"
   | "ctr";
+
+export type DeliveryFilter = "all" | "active" | "inactive";
 
 type Props = {
   creatives: Creative[];
   thresholds: Thresholds;
   filter: TierStatus | "all";
-  selected: Set<string>;
-  onToggleSelect: (key: string) => void;
-  onToggleAll: (keys: string[]) => void;
+  deliveryFilter: DeliveryFilter;
+  account: AdAccount;
   hasAdIds: boolean;
 };
 
@@ -34,13 +35,19 @@ const STATUS_RANK: Record<TierStatus, number> = {
   new: 3,
 };
 
+const STATUS_COLOR: Record<TierStatus, string> = {
+  winner: "#1D9E75",
+  watch: "#EF9F27",
+  cut: "#E24B4A",
+  new: "#8a8a92",
+};
+
 export function CreativesTable({
   creatives,
   thresholds,
   filter,
-  selected,
-  onToggleSelect,
-  onToggleAll,
+  deliveryFilter,
+  account,
   hasAdIds,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -58,13 +65,16 @@ export function CreativesTable({
     [creatives, thresholds],
   );
 
-  const filtered = useMemo(
-    () =>
-      filter === "all"
-        ? decorated
-        : decorated.filter((d) => d.status === filter),
-    [decorated, filter],
-  );
+  const filtered = useMemo(() => {
+    let d = decorated;
+    if (deliveryFilter === "active") {
+      d = d.filter((x) => x.creative.delivery === "active");
+    } else if (deliveryFilter === "inactive") {
+      d = d.filter((x) => x.creative.delivery !== "active");
+    }
+    if (filter !== "all") d = d.filter((x) => x.status === filter);
+    return d;
+  }, [decorated, filter, deliveryFilter]);
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -80,15 +90,26 @@ export function CreativesTable({
     });
   }, [filtered, sort]);
 
-  const allKeys = sorted.map((d) => d.key);
-  const allSelected = allKeys.length > 0 && allKeys.every((k) => selected.has(k));
-
   const toggleSort = (key: SortKey) => {
     setSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
         : { key, dir: "desc" },
     );
+  };
+
+  const openInAdsManager = (c: Creative) => {
+    if (!account.actId) return;
+    try {
+      const url = buildAdsManagerUrl({
+        account,
+        adNames: [c.adName],
+        adIds: c.adId ? [c.adId] : undefined,
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      /* no-op */
+    }
   };
 
   if (sorted.length === 0) {
@@ -99,49 +120,29 @@ export function CreativesTable({
     );
   }
 
+  const isClickable = !!account.actId;
+
   return (
     <div className="bg-surface border border-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-surface2 border-b border-border text-xs uppercase tracking-wider text-textDim">
             <tr>
-              <th className="w-10 px-3 py-2.5 text-left">
-                <input
-                  type="checkbox"
-                  className="accent-accent"
-                  checked={allSelected}
-                  onChange={() => onToggleAll(allKeys)}
-                  aria-label="Select all visible"
-                />
-              </th>
               <SortableTH
-                label="Status"
-                sortKey="status"
-                sort={sort}
-                onClick={toggleSort}
-                align="left"
-              />
-              <SortableTH
-                label="Ad"
+                label="Creative"
                 sortKey="adName"
                 sort={sort}
                 onClick={toggleSort}
                 align="left"
               />
               <SortableTH
-                label="Spend"
-                sortKey="spend"
+                label="Tier"
+                sortKey="status"
                 sort={sort}
                 onClick={toggleSort}
-                align="right"
+                align="left"
               />
-              <SortableTH
-                label="Results"
-                sortKey="results"
-                sort={sort}
-                onClick={toggleSort}
-                align="right"
-              />
+              <th className="px-3 py-2.5 text-left">Delivery</th>
               <SortableTH
                 label="CPL"
                 sortKey="cpl"
@@ -150,8 +151,15 @@ export function CreativesTable({
                 align="right"
               />
               <SortableTH
-                label="Impressions"
-                sortKey="impressions"
+                label="Leads"
+                sortKey="results"
+                sort={sort}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortableTH
+                label="Spend"
+                sortKey="spend"
                 sort={sort}
                 onClick={toggleSort}
                 align="right"
@@ -164,30 +172,28 @@ export function CreativesTable({
                 align="right"
               />
               <th className="px-3 py-2.5 text-left">Quality</th>
-              <th className="px-3 py-2.5 text-left">Delivery</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map(({ creative: c, status, key }) => (
               <tr
                 key={key}
-                className="border-b border-border last:border-b-0 hover:bg-surface2/60 transition-colors"
+                onClick={() => isClickable && openInAdsManager(c)}
+                className={`border-b border-border last:border-b-0 transition-colors ${
+                  isClickable
+                    ? "cursor-pointer hover:bg-surface2/60"
+                    : ""
+                }`}
               >
-                <td className="px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    className="accent-accent"
-                    checked={selected.has(key)}
-                    onChange={() => onToggleSelect(key)}
-                    aria-label={`Select ${c.adName}`}
-                  />
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusBadge status={status} />
-                </td>
                 <td className="px-3 py-2.5 max-w-sm">
-                  <div className="truncate" title={c.adName}>
-                    {c.adName}
+                  <div
+                    className="flex items-center gap-1.5 truncate"
+                    title={c.adName}
+                  >
+                    <span className="truncate">{c.adName}</span>
+                    {isClickable && (
+                      <span className="text-textDim text-xs shrink-0">↗</span>
+                    )}
                   </div>
                   {c.campaignName && (
                     <div
@@ -198,17 +204,23 @@ export function CreativesTable({
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                  {fmtCurrency(c.spend)}
+                <td className="px-3 py-2.5">
+                  <StatusBadge status={status} />
+                </td>
+                <td className="px-3 py-2.5">
+                  <DeliveryBadge status={c.delivery} />
+                </td>
+                <td
+                  className="px-3 py-2.5 text-right font-mono tabular-nums"
+                  style={{ color: STATUS_COLOR[status] }}
+                >
+                  {c.cpl != null ? fmtCurrency(c.cpl) : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                   {fmtNumber(c.results)}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                  {fmtCurrency(c.cpl)}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-textDim">
-                  {fmtNumber(c.impressions)}
+                  {fmtCurrency(c.spend)}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums text-textDim">
                   {fmtPct(c.ctr)}
@@ -216,18 +228,20 @@ export function CreativesTable({
                 <td className="px-3 py-2.5">
                   <QualityBadge rank={c.quality} />
                 </td>
-                <td className="px-3 py-2.5">
-                  <DeliveryBadge status={c.delivery} />
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {!hasAdIds && (
+      {!hasAdIds && isClickable && (
         <div className="bg-surface2 border-t border-border px-4 py-2 text-xs text-textDim">
-          No Ad ID column detected — the open-in-Ads-Manager link will filter by
-          ad name only.
+          No Ad ID column detected — rows open filtered by ad name only.
+          Re-export with the Ad ID column for precise links.
+        </div>
+      )}
+      {!isClickable && (
+        <div className="bg-surface2 border-t border-border px-4 py-2 text-xs text-textDim">
+          Add an Ad account ID in the sidebar to make rows clickable.
         </div>
       )}
     </div>
@@ -277,8 +291,6 @@ function value(
       return c.results;
     case "cpl":
       return c.cpl;
-    case "impressions":
-      return c.impressions;
     case "ctr":
       return c.ctr;
   }

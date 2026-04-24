@@ -1,14 +1,19 @@
 "use client";
 
 import { AdAccount, Thresholds } from "@/lib/types";
+import { TopN } from "./CplChart";
 
 type Props = {
   thresholds: Thresholds;
   onThresholdsChange: (t: Thresholds) => void;
   account: AdAccount;
   onAccountChange: (a: AdAccount) => void;
+  topN: TopN;
+  onTopNChange: (t: TopN) => void;
   onClearData: () => void;
   hasData: boolean;
+  hasAdIds: boolean;
+  creativesCount: number;
 };
 
 export function Sidebar({
@@ -16,17 +21,46 @@ export function Sidebar({
   onThresholdsChange,
   account,
   onAccountChange,
+  topN,
+  onTopNChange,
   onClearData,
   hasData,
+  hasAdIds,
+  creativesCount,
 }: Props) {
+  const hasAccount = !!account.actId.trim();
+
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-surface p-5 flex flex-col gap-6 h-screen sticky top-0">
+    <aside className="w-64 shrink-0 border-r border-border bg-surface p-5 flex flex-col gap-6 h-screen sticky top-0 overflow-y-auto">
       <div>
         <div className="text-sm font-semibold tracking-tight">
           Creative Performance
         </div>
-        <div className="text-xs text-textDim mt-0.5">Analyzer · MVP</div>
+        <div className="text-xs text-textDim mt-0.5">Meta Ads analyzer</div>
       </div>
+
+      <Section title="Ad account">
+        <Field label="Account ID">
+          <TextInput
+            placeholder="e.g. 123456789"
+            value={account.actId}
+            onChange={(v) => onAccountChange({ ...account, actId: v })}
+          />
+          <Hint>
+            Needed for clickable rows. Find in Ads Manager URL as{" "}
+            <code className="font-mono text-textDim">?act=</code>.
+          </Hint>
+        </Field>
+        <Field label="Business ID (optional)">
+          <TextInput
+            placeholder="—"
+            value={account.businessId ?? ""}
+            onChange={(v) =>
+              onAccountChange({ ...account, businessId: v || undefined })
+            }
+          />
+        </Field>
+      </Section>
 
       <Section title="Thresholds">
         <Field label="Target CPL">
@@ -65,26 +99,42 @@ export function Sidebar({
         </Field>
       </Section>
 
-      <Section title="Ad account">
-        <Field label="Account ID">
-          <TextInput
-            placeholder="123456789"
-            value={account.actId}
-            onChange={(v) => onAccountChange({ ...account, actId: v })}
-          />
-        </Field>
-        <Field label="Business ID (optional)">
-          <TextInput
-            placeholder="—"
-            value={account.businessId ?? ""}
-            onChange={(v) =>
-              onAccountChange({ ...account, businessId: v || undefined })
-            }
-          />
+      <Section title="Chart">
+        <Field label="Top N in CPL chart">
+          <select
+            value={String(topN)}
+            onChange={(e) => {
+              const v = e.target.value;
+              onTopNChange(v === "all" ? "all" : (Number(v) as TopN));
+            }}
+            className="w-full bg-surface2 border border-border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-accent cursor-pointer"
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="all">All</option>
+          </select>
         </Field>
       </Section>
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-3">
+        {hasData && (
+          <div className="text-xs text-textDim border-t border-border pt-3 leading-relaxed">
+            <div>
+              {creativesCount} creative{creativesCount === 1 ? "" : "s"} loaded
+            </div>
+            <div>
+              Links:{" "}
+              {!hasAccount ? (
+                <span className="text-watch">add account ID</span>
+              ) : hasAdIds ? (
+                <span className="text-winner">precise (Ad ID)</span>
+              ) : (
+                <span className="text-watch">name search</span>
+              )}
+            </div>
+          </div>
+        )}
         {hasData && (
           <button
             className="w-full text-xs text-textDim hover:text-cut transition-colors py-2"
@@ -127,6 +177,12 @@ function Field({
       <span className="text-xs text-textDim">{label}</span>
       {children}
     </label>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[10px] text-textDim leading-snug">{children}</span>
   );
 }
 
