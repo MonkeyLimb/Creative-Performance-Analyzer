@@ -33,7 +33,7 @@ export function buildAdsManagerUrl({
 }
 
 export function encodeAdNameFilter(adNames: string[]): string {
-  return encodeURIComponent(JSON.stringify(JSON.stringify(adNames)));
+  return JSON.stringify(JSON.stringify(adNames));
 }
 
 export function normalizeActId(actId: string): string {
