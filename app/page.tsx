@@ -23,7 +23,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CplChart, TopN } from "@/components/CplChart";
-import { SpendCplScatter } from "@/components/ScatterChart";
+import { SpendVsLeadsScatter } from "@/components/ScatterChart";
 import {
   CreativesTable,
   DeliveryFilter,
@@ -220,8 +220,8 @@ export default function DashboardPage() {
                   topN={topN}
                 />
               </Panel>
-              <Panel title="Spend vs CPL">
-                <SpendCplScatter
+              <Panel title="Spend vs Leads">
+                <SpendVsLeadsScatter
                   creatives={creatives}
                   thresholds={thresholds}
                 />

@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,7 +29,7 @@ type Props = {
 
 export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
   const sorted = creatives
-    .filter((c) => c.cpl != null)
+    .filter((c) => c.cpl != null && (c.cpl as number) > 0)
     .sort((a, b) => (a.cpl as number) - (b.cpl as number));
 
   const limited = topN === "all" ? sorted : sorted.slice(0, topN);
@@ -51,7 +50,7 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
     );
   }
 
-  const height = Math.max(280, data.length * 28);
+  const height = Math.max(280, data.length * 32);
 
   return (
     <div style={{ height }}>
@@ -59,11 +58,17 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 4, right: 24, left: 4, bottom: 4 }}
+          margin={{ top: 8, right: 24, left: 0, bottom: 8 }}
+          barCategoryGap={6}
         >
-          <CartesianGrid stroke="#2a2a2e" horizontal={false} />
+          <CartesianGrid
+            stroke="#2a2a2e"
+            strokeDasharray="3 3"
+            horizontal={false}
+          />
           <XAxis
             type="number"
+            domain={[0, "dataMax"]}
             tick={{ fill: "#8a8a92", fontSize: 10 }}
             tickFormatter={(v) => `$${v}`}
           />
@@ -75,7 +80,7 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
             interval={0}
           />
           <Tooltip
-            cursor={{ fill: "rgba(107, 95, 255, 0.05)" }}
+            cursor={{ fill: "rgba(107, 95, 255, 0.06)" }}
             content={({ active, payload }) => {
               if (!active || !payload || !payload.length) return null;
               const p = payload[0].payload as {
@@ -86,36 +91,14 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
               return (
                 <div className="bg-surface2 border border-border rounded px-2.5 py-1.5 text-xs max-w-xs">
                   <div className="text-text break-all">{p.fullName}</div>
-                  <div className="font-mono text-textDim mt-0.5">
+                  <div className="font-mono tabular-nums text-textDim mt-0.5">
                     CPL ${p.cpl.toFixed(2)}
                   </div>
                 </div>
               );
             }}
           />
-          <ReferenceLine
-            x={thresholds.winnerCpl}
-            stroke="#1D9E75"
-            strokeDasharray="4 4"
-            label={{
-              value: `Win ≤ $${thresholds.winnerCpl}`,
-              fill: "#1D9E75",
-              fontSize: 10,
-              position: "top",
-            }}
-          />
-          <ReferenceLine
-            x={thresholds.cutCpl}
-            stroke="#E24B4A"
-            strokeDasharray="4 4"
-            label={{
-              value: `Cut ≥ $${thresholds.cutCpl}`,
-              fill: "#E24B4A",
-              fontSize: 10,
-              position: "top",
-            }}
-          />
-          <Bar dataKey="cpl" radius={[0, 3, 3, 0]}>
+          <Bar dataKey="cpl" radius={[0, 3, 3, 0]} minPointSize={2}>
             {data.map((entry, idx) => (
               <Cell key={idx} fill={STATUS_COLOR[entry.status]} />
             ))}
@@ -141,7 +124,7 @@ function commonPrefix(strings: string[]): string {
 function smartTruncate(s: string, prefix: string, max: number): string {
   if (prefix.length > 8 && s.length > max) {
     const suffix = s.slice(prefix.length);
-    const budget = max - 1; // room for the leading ellipsis
+    const budget = max - 1;
     if (suffix.length <= budget) return "…" + suffix;
     return "…" + suffix.slice(-budget);
   }
