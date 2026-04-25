@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart as RScatter,
@@ -25,18 +24,29 @@ type Props = {
   thresholds: Thresholds;
 };
 
-export function SpendCplScatter({ creatives, thresholds }: Props) {
-  const byStatus: Record<TierStatus, Array<{ x: number; y: number; name: string }>> = {
+type Point = {
+  x: number;
+  y: number;
+  name: string;
+  cpl: number | null;
+};
+
+export function SpendVsLeadsScatter({ creatives, thresholds }: Props) {
+  const byStatus: Record<TierStatus, Point[]> = {
     winner: [],
     watch: [],
     cut: [],
   };
 
   for (const c of creatives) {
-    if (c.spend <= 0) continue;
+    if (c.spend <= 0 && c.results <= 0) continue;
     const status = classify(c, thresholds);
-    const cpl = c.cpl ?? 0;
-    byStatus[status].push({ x: c.spend, y: cpl, name: c.adName });
+    byStatus[status].push({
+      x: c.spend,
+      y: c.results,
+      name: c.adName,
+      cpl: c.cpl,
+    });
   }
 
   const total = Object.values(byStatus).reduce((s, arr) => s + arr.length, 0);
@@ -51,63 +61,52 @@ export function SpendCplScatter({ creatives, thresholds }: Props) {
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
-        <RScatter margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid stroke="#2a2a2e" />
+        <RScatter margin={{ top: 8, right: 24, left: 0, bottom: 24 }}>
+          <CartesianGrid stroke="#2a2a2e" strokeDasharray="3 3" />
           <XAxis
             type="number"
             dataKey="x"
             name="Spend"
-            tick={{ fill: "#8a8a92", fontSize: 11 }}
+            tick={{ fill: "#8a8a92", fontSize: 10 }}
             tickFormatter={(v) => `$${v}`}
+            label={{
+              value: "Spend ($)",
+              position: "insideBottom",
+              offset: -10,
+              fill: "#8a8a92",
+              fontSize: 11,
+            }}
           />
           <YAxis
             type="number"
             dataKey="y"
-            name="CPL"
-            tick={{ fill: "#8a8a92", fontSize: 11 }}
-            tickFormatter={(v) => `$${v}`}
+            name="Leads"
+            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            label={{
+              value: "Leads",
+              angle: -90,
+              position: "insideLeft",
+              offset: 16,
+              fill: "#8a8a92",
+              fontSize: 11,
+            }}
           />
           <ZAxis range={[60, 60]} />
           <Tooltip
-            cursor={{ stroke: "#2a2a2e" }}
-            contentStyle={{
-              backgroundColor: "#161618",
-              border: "1px solid #2a2a2e",
-              borderRadius: 6,
-              color: "#e8e8ea",
-              fontSize: 12,
-            }}
-            formatter={(value: number, name: string) => [
-              `$${value.toFixed(2)}`,
-              name,
-            ]}
-            labelFormatter={() => ""}
+            cursor={{ stroke: "#2a2a2e", strokeDasharray: "3 3" }}
             content={({ payload }) => {
               if (!payload || !payload.length) return null;
-              const p = payload[0].payload as {
-                name: string;
-                x: number;
-                y: number;
-              };
+              const p = payload[0].payload as Point;
               return (
-                <div className="bg-surface border border-border rounded px-2 py-1.5 text-xs">
-                  <div className="text-text">{p.name}</div>
-                  <div className="font-mono text-textDim">
-                    Spend ${p.x.toFixed(2)} · CPL ${p.y.toFixed(2)}
+                <div className="bg-surface2 border border-border rounded px-2.5 py-1.5 text-xs max-w-[260px]">
+                  <div className="text-text break-all mb-0.5">{p.name}</div>
+                  <div className="font-mono tabular-nums text-textDim">
+                    Spend ${p.x.toFixed(2)} · Leads {p.y}
+                    {p.cpl != null && ` · CPL $${p.cpl.toFixed(2)}`}
                   </div>
                 </div>
               );
             }}
-          />
-          <ReferenceLine
-            y={thresholds.winnerCpl}
-            stroke="#1D9E75"
-            strokeDasharray="4 4"
-          />
-          <ReferenceLine
-            y={thresholds.cutCpl}
-            stroke="#E24B4A"
-            strokeDasharray="4 4"
           />
           {(Object.keys(byStatus) as TierStatus[]).map((status) => (
             <Scatter
