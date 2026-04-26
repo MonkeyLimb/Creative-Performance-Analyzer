@@ -3,6 +3,7 @@ const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`;
 
 export type AssetRef =
   | { kind: "image"; url: string; label: string }
+  | { kind: "image-hash"; hash: string; label: string }
   | { kind: "video"; videoId: string; url?: string; label: string };
 
 export type ResolvedAsset = {
@@ -15,11 +16,13 @@ export type MetaCreative = {
   id?: string;
   object_type?: string;
   image_url?: string;
+  image_hash?: string;
   video_id?: string;
   thumbnail_url?: string;
   object_story_spec?: {
     link_data?: {
       picture?: string;
+      image_hash?: string;
       video_id?: string;
       child_attachments?: Array<{
         picture?: string;
@@ -30,6 +33,7 @@ export type MetaCreative = {
     video_data?: {
       video_id?: string;
       image_url?: string;
+      image_hash?: string;
     };
   };
   asset_feed_spec?: {
@@ -41,6 +45,7 @@ export type MetaCreative = {
 export type MetaAd = {
   id?: string;
   name?: string;
+  account_id?: string;
   creative?: MetaCreative;
 };
 
@@ -59,6 +64,8 @@ export function extractAssetRefs(creative: MetaCreative | undefined): AssetRef[]
 
   if (creative.image_url) {
     refs.push({ kind: "image", url: creative.image_url, label: "image" });
+  } else if (creative.image_hash) {
+    refs.push({ kind: "image-hash", hash: creative.image_hash, label: "image" });
   }
   if (creative.video_id) {
     refs.push({ kind: "video", videoId: creative.video_id, label: "video" });
@@ -68,6 +75,13 @@ export function extractAssetRefs(creative: MetaCreative | undefined): AssetRef[]
   const videoData = creative.object_story_spec?.video_data;
   if (videoData?.video_id) {
     refs.push({ kind: "video", videoId: videoData.video_id, label: "video" });
+  } else if (videoData?.image_hash) {
+    refs.push({ kind: "image-hash", hash: videoData.image_hash, label: "video-thumb" });
+  }
+  if (linkData?.image_hash && !linkData.picture) {
+    refs.push({ kind: "image-hash", hash: linkData.image_hash, label: "image" });
+  } else if (linkData?.picture) {
+    refs.push({ kind: "image", url: linkData.picture, label: "image" });
   }
 
   const children = linkData?.child_attachments || [];
@@ -85,14 +99,26 @@ export function extractAssetRefs(creative: MetaCreative | undefined): AssetRef[]
         url: child.picture,
         label: `${idx}-carousel-image`,
       });
+    } else if (child.image_hash) {
+      refs.push({
+        kind: "image-hash",
+        hash: child.image_hash,
+        label: `${idx}-carousel-image`,
+      });
     }
   });
 
   const feed = creative.asset_feed_spec;
   (feed?.images || []).forEach((img, i) => {
+    const idx = String(i + 1).padStart(2, "0");
     if (img.url) {
-      const idx = String(i + 1).padStart(2, "0");
       refs.push({ kind: "image", url: img.url, label: `${idx}-dynamic-image` });
+    } else if (img.hash) {
+      refs.push({
+        kind: "image-hash",
+        hash: img.hash,
+        label: `${idx}-dynamic-image`,
+      });
     }
   });
   (feed?.videos || []).forEach((v, i) => {
@@ -113,12 +139,35 @@ function dedupeRefs(refs: AssetRef[]): AssetRef[] {
   const seen = new Set<string>();
   const out: AssetRef[] = [];
   for (const r of refs) {
-    const key = r.kind === "image" ? `i:${r.url}` : `v:${r.videoId}`;
+    const key =
+      r.kind === "image"
+        ? `i:${r.url}`
+        : r.kind === "image-hash"
+          ? `h:${r.hash}`
+          : `v:${r.videoId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);
   }
   return out;
+}
+
+export function summarizeCreative(creative: MetaCreative | undefined): string {
+  if (!creative) return "(no creative)";
+  const keys = Object.keys(creative).filter((k) => creative[k as keyof MetaCreative] != null);
+  const parts: string[] = [...keys];
+  const oss = creative.object_story_spec;
+  if (oss) {
+    const ossKeys = Object.keys(oss).filter((k) => (oss as Record<string, unknown>)[k] != null);
+    parts.push(`object_story_spec[${ossKeys.join(",")}]`);
+  }
+  const feed = creative.asset_feed_spec;
+  if (feed) {
+    parts.push(
+      `asset_feed_spec[images:${feed.images?.length ?? 0},videos:${feed.videos?.length ?? 0}]`,
+    );
+  }
+  return parts.join(" ");
 }
 
 export function safeFilename(name: string): string {
@@ -176,7 +225,7 @@ async function graphGet<T>(path: string, token: string, params: Record<string, s
 export async function fetchAd(adId: string, token: string): Promise<MetaAd> {
   return graphGet<MetaAd>(adId, token, {
     fields:
-      "name,creative{id,object_type,image_url,video_id,thumbnail_url,object_story_spec,asset_feed_spec}",
+      "name,account_id,creative{id,object_type,image_url,image_hash,video_id,thumbnail_url,object_story_spec,asset_feed_spec}",
   });
 }
 
@@ -186,14 +235,48 @@ export async function resolveVideoSource(videoId: string, token: string): Promis
   return v.source;
 }
 
+export async function resolveImageHashes(
+  accountId: string,
+  hashes: string[],
+  token: string,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (hashes.length === 0) return map;
+  const act = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
+  const json = await graphGet<{
+    data?: Array<{ hash?: string; url?: string; permalink_url?: string }>;
+  }>(`${act}/adimages`, token, {
+    fields: "hash,url,permalink_url",
+    hashes: JSON.stringify(hashes),
+  });
+  for (const img of json.data || []) {
+    if (img.hash && (img.url || img.permalink_url)) {
+      map.set(img.hash, img.url || img.permalink_url || "");
+    }
+  }
+  return map;
+}
+
 export async function resolveAssetUrls(
   refs: AssetRef[],
   token: string,
+  accountId?: string,
 ): Promise<ResolvedAsset[]> {
+  const hashes = refs
+    .filter((r): r is Extract<AssetRef, { kind: "image-hash" }> => r.kind === "image-hash")
+    .map((r) => r.hash);
+  const hashMap =
+    hashes.length > 0 && accountId
+      ? await resolveImageHashes(accountId, hashes, token)
+      : new Map<string, string>();
+
   const out: ResolvedAsset[] = [];
   for (const ref of refs) {
     if (ref.kind === "image") {
       out.push({ kind: "image", url: ref.url, label: ref.label });
+    } else if (ref.kind === "image-hash") {
+      const url = hashMap.get(ref.hash);
+      if (url) out.push({ kind: "image", url, label: ref.label });
     } else {
       const url = ref.url || (await resolveVideoSource(ref.videoId, token));
       out.push({ kind: "video", url, label: ref.label });

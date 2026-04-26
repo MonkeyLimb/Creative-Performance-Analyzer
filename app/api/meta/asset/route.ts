@@ -8,6 +8,7 @@ import {
   fetchAd,
   resolveAssetUrls,
   safeFilename,
+  summarizeCreative,
 } from "@/lib/meta-api";
 
 export const runtime = "nodejs";
@@ -37,10 +38,19 @@ export async function POST(req: NextRequest): Promise<Response> {
     const ad = await fetchAd(adId, token);
     const refs = extractAssetRefs(ad.creative);
     if (refs.length === 0) {
-      return jsonError("No downloadable assets on this ad's creative", 404);
+      return jsonError(
+        `No assets found in creative. Shape: ${summarizeCreative(ad.creative)}`,
+        404,
+      );
     }
 
-    const resolved = await resolveAssetUrls(refs, token);
+    const resolved = await resolveAssetUrls(refs, token, ad.account_id);
+    if (resolved.length === 0) {
+      return jsonError(
+        "Found asset references but could not resolve any URLs (image hashes may need ads_management scope)",
+        502,
+      );
+    }
     const archive = archiver("zip", { zlib: { level: 6 } });
 
     let appended = 0;
