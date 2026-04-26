@@ -78,7 +78,7 @@ export function RoasScatter({
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
-        <RScatter margin={{ top: 8, right: 24, left: 0, bottom: 24 }}>
+        <RScatter margin={{ top: 12, right: 32, left: 16, bottom: 32 }}>
           <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" />
           <XAxis
             type="number"
@@ -89,7 +89,7 @@ export function RoasScatter({
             label={{
               value: "Spend ($)",
               position: "insideBottom",
-              offset: -10,
+              offset: -14,
               fill: "var(--color-textDim)",
               fontSize: 11,
             }}
@@ -100,11 +100,12 @@ export function RoasScatter({
             name="ROAS"
             tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
             tickFormatter={(v) => `${v}×`}
+            width={48}
             label={{
               value: "ROAS",
               angle: -90,
               position: "insideLeft",
-              offset: 16,
+              offset: 8,
               fill: "var(--color-textDim)",
               fontSize: 11,
             }}
@@ -116,7 +117,8 @@ export function RoasScatter({
             strokeDasharray="2 4"
             label={{
               value: "break-even",
-              position: "right",
+              position: "insideTopRight",
+              offset: 6,
               fill: "var(--color-textDim)",
               fontSize: 9,
             }}

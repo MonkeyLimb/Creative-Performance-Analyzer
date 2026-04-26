@@ -76,7 +76,7 @@ export function RoasChart({
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 8, right: 24, left: 0, bottom: 8 }}
+          margin={{ top: 22, right: 32, left: 0, bottom: 8 }}
           barCategoryGap={6}
         >
           <CartesianGrid
@@ -103,7 +103,8 @@ export function RoasChart({
             strokeDasharray="2 4"
             label={{
               value: "break-even",
-              position: "top",
+              position: "insideTop",
+              offset: 8,
               fill: "var(--color-textDim)",
               fontSize: 9,
             }}
