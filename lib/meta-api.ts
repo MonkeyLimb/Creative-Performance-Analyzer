@@ -230,8 +230,8 @@ export async function fetchAd(adId: string, token: string): Promise<MetaAd> {
     "image_hash",
     "video_id",
     "thumbnail_url",
-    "object_story_spec{link_data{picture,image_hash,video_id,child_attachments.limit(50){picture,image_hash,video_id}},video_data{video_id,image_hash,image_url}}",
-    "asset_feed_spec{images.limit(100){hash,url},videos.limit(100){video_id,thumbnail_url,thumbnail_hash}}",
+    "object_story_spec{link_data{picture,video_id,child_attachments{picture,image_hash,video_id}},video_data{video_id,image_url}}",
+    "asset_feed_spec{images{hash,url},videos{video_id,thumbnail_url}}",
   ].join(",");
   return graphGet<MetaAd>(adId, token, {
     fields: `name,account_id,creative{${creativeFields}}`,
