@@ -427,6 +427,49 @@ function SchoolMatchEditor({
 }) {
   const isManual = source !== "auto";
 
+  // No match (auto or manually cleared) — show the school dropdown directly
+  // so it's obvious users can pick one without first clicking a chip.
+  if (!match) {
+    return (
+      <div className="inline-flex flex-wrap items-center gap-1.5">
+        <select
+          value={source === "manual-cleared" ? "__none__" : ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "") onClear();
+            else if (v === "__none__") onSet(null, null);
+            else onSet(v, null);
+          }}
+          className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[10px] text-textDim focus:outline-none focus:border-accent hover:border-accent/50 transition-colors"
+          title="Pick a school for this creative"
+        >
+          <option value="" disabled>
+            {source === "manual-cleared" ? "No match (manual)" : "Pick school…"}
+          </option>
+          <option value="">Auto-detect</option>
+          <option value="__none__">No match</option>
+          <optgroup label="Schools">
+            {SCHOOL_REGISTRY.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        {isManual && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[10px] text-textDim hover:text-cut underline-offset-2 hover:underline"
+            title="Revert to auto-detect"
+          >
+            ↺ auto
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="inline-flex flex-col items-start gap-1">
       <button
@@ -443,18 +486,12 @@ function SchoolMatchEditor({
             : "Auto-detected — click to override"
         }
       >
-        {match ? (
+        <span className="text-text font-medium">{match.school}</span>
+        {match.program && (
           <>
-            <span className="text-text font-medium">{match.school}</span>
-            {match.program && (
-              <>
-                <span className="text-textDim/60">·</span>
-                <span>{match.program}</span>
-              </>
-            )}
+            <span className="text-textDim/60">·</span>
+            <span>{match.program}</span>
           </>
-        ) : (
-          <span>{source === "manual-cleared" ? "No match (manual)" : "No school match"}</span>
         )}
         <span className="text-textDim text-[9px] ml-0.5">
           {isEditing ? "▴" : "✎"}
@@ -463,16 +500,12 @@ function SchoolMatchEditor({
       {isEditing && (
         <div className="flex flex-wrap items-center gap-1.5 bg-surface2 border border-border rounded-md p-1.5">
           <select
-            value={match?.school ?? (source === "manual-cleared" ? "__none__" : "")}
+            value={match.school}
             onChange={(e) => {
               const v = e.target.value;
-              if (v === "") {
-                onClear();
-              } else if (v === "__none__") {
-                onSet(null, null);
-              } else {
-                onSet(v, null);
-              }
+              if (v === "") onClear();
+              else if (v === "__none__") onSet(null, null);
+              else onSet(v, null);
             }}
             className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-accent"
           >
@@ -484,25 +517,23 @@ function SchoolMatchEditor({
               </option>
             ))}
           </select>
-          {match?.school && (
-            <select
-              value={match.program ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                onSet(match.school, v === "" ? null : v);
-              }}
-              className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-accent max-w-[200px]"
-            >
-              <option value="">— program —</option>
-              {(SCHOOL_REGISTRY.find((s) => s.name === match.school)?.programs ?? []).map(
-                (p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                  </option>
-                ),
-              )}
-            </select>
-          )}
+          <select
+            value={match.program ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              onSet(match.school, v === "" ? null : v);
+            }}
+            className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-accent max-w-[200px]"
+          >
+            <option value="">— program —</option>
+            {(SCHOOL_REGISTRY.find((s) => s.name === match.school)?.programs ?? []).map(
+              (p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ),
+            )}
+          </select>
           {isManual && (
             <button
               type="button"
