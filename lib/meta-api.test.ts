@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractAssetRefs, extensionFor, safeFilename } from "./meta-api";
+import { extractAssetRefs, extensionFor, mergeRefs, safeFilename } from "./meta-api";
 
 describe("extractAssetRefs", () => {
   it("returns empty for missing creative", () => {
@@ -128,6 +128,26 @@ describe("extractAssetRefs", () => {
     });
     expect(refs).toEqual([
       { kind: "image", url: "https://cdn.example.com/a.jpg", label: "image" },
+    ]);
+  });
+});
+
+describe("mergeRefs", () => {
+  it("dedupes across lists, preserving first occurrence", () => {
+    const a = [
+      { kind: "image" as const, url: "u1", label: "creative-1" },
+      { kind: "image-hash" as const, hash: "h1", label: "creative-2" },
+    ];
+    const b = [
+      { kind: "image" as const, url: "u1", label: "breakdown-1" },
+      { kind: "image-hash" as const, hash: "h2", label: "breakdown-2" },
+      { kind: "video" as const, videoId: "v1", label: "breakdown-3" },
+    ];
+    expect(mergeRefs(a, b)).toEqual([
+      { kind: "image", url: "u1", label: "creative-1" },
+      { kind: "image-hash", hash: "h1", label: "creative-2" },
+      { kind: "image-hash", hash: "h2", label: "breakdown-2" },
+      { kind: "video", videoId: "v1", label: "breakdown-3" },
     ]);
   });
 });
