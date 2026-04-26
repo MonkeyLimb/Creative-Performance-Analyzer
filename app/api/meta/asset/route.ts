@@ -22,7 +22,7 @@ function getToken(req: NextRequest): string | null {
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  let body: { adId?: string };
+  let body: { adId?: string; debug?: "shape" };
   try {
     body = await req.json();
   } catch {
@@ -36,12 +36,23 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const ad = await fetchAd(adId, token);
+
+    if (body.debug === "shape") {
+      const filename = `${safeFilename(ad.name || `ad-${adId}`)}-${adId}-creative.json`;
+      return new Response(JSON.stringify(ad, null, 2), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     const refs = extractAssetRefs(ad.creative);
+    const shape = summarizeCreative(ad.creative);
     if (refs.length === 0) {
-      return jsonError(
-        `No assets found in creative. Shape: ${summarizeCreative(ad.creative)}`,
-        404,
-      );
+      return jsonError(`No assets found in creative. Shape: ${shape}`, 404);
     }
 
     const resolved = await resolveAssetUrls(refs, token, ad.account_id);
@@ -83,6 +94,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         "X-Asset-Found": String(refs.length),
         "X-Asset-Resolved": String(resolved.length),
         "X-Asset-Added": String(appended),
+        "X-Creative-Shape": shape,
       },
     });
   } catch (e) {
