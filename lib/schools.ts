@@ -136,7 +136,28 @@ export const SCHOOL_REGISTRY: School[] = [
   },
   {
     name: "FSU",
-    aliases: ["fsu", "full sail", "fullsail"],
+    // School-level aliases include the program names because the team often
+    // omits the "FSU" prefix in ad names ("GameDev|...", "IT|...", etc.).
+    // Longest-alias-wins still correctly hands "CTU|IT" off to CTU.
+    aliases: [
+      "fsu",
+      "full sail",
+      "fullsail",
+      "music production",
+      "music",
+      "game development",
+      "game dev",
+      "gamedev",
+      "game-dev",
+      "cybersecurity",
+      "cyber security",
+      "cybersec",
+      "cyber",
+      "information technology",
+      "it h&p",
+      "it h p",
+      "it",
+    ],
     defaultRpl: 75,
     programs: [
       {

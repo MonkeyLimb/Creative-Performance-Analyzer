@@ -77,6 +77,34 @@ describe("detectSchool", () => {
       program: "Game Development",
     });
   });
+
+  it("matches FSU IT when only the IT alias is present (no school prefix)", () => {
+    expect(detectSchool(fakeCreative("IT|NewCreatives|4.23"))).toEqual({
+      school: "FSU",
+      program: "Information Technology",
+    });
+  });
+
+  it("matches FSU Cyber from a bare Cyber-prefixed ad name", () => {
+    expect(detectSchool(fakeCreative("Cyber|Static|3"))).toEqual({
+      school: "FSU",
+      program: "Cybersecurity",
+    });
+  });
+
+  it("matches FSU GameDev from a bare GameDev-prefixed ad name", () => {
+    expect(detectSchool(fakeCreative("GameDev|Week 3.15-21.2026_creatives"))).toEqual({
+      school: "FSU",
+      program: "Game Development",
+    });
+  });
+
+  it("still routes CTU IT to CTU when the school is named", () => {
+    expect(detectSchool(fakeCreative("CTU|IT|Q2"))).toEqual({
+      school: "CTU",
+      program: "Information Technology",
+    });
+  });
 });
 
 describe("getRpl", () => {
