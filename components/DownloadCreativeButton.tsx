@@ -22,11 +22,12 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
       ? "Paste a Meta token in the sidebar"
       : status === "loading"
         ? "Downloading…"
-        : "Download creative assets";
+        : "Download creative assets (Shift+click for raw creative JSON)";
 
   const onClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled || !adId) return;
+    const debug = e.shiftKey;
     setStatus("loading");
     setError(null);
     setInfo(null);
@@ -37,7 +38,7 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ adId }),
+        body: JSON.stringify({ adId, ...(debug ? { debug: "shape" } : {}) }),
       });
       if (!res.ok) {
         let msg = `Download failed (${res.status})`;
@@ -52,16 +53,22 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
       }
       const found = res.headers.get("x-asset-found");
       const added = res.headers.get("x-asset-added");
+      const shape = res.headers.get("x-creative-shape");
       const blob = await res.blob();
-      const filename = parseFilename(res.headers.get("content-disposition")) || `${adName}.zip`;
+      const filename =
+        parseFilename(res.headers.get("content-disposition")) ||
+        (debug ? `${adName}-creative.json` : `${adName}.zip`);
       triggerDownload(blob, filename);
       setStatus("success");
-      if (found && added) {
-        const f = Number(found);
+      if (debug) {
+        setInfo("creative.json");
+      } else if (found && added) {
         const a = Number(added);
-        setInfo(a < f ? `${a} of ${f} assets` : `${a} asset${a === 1 ? "" : "s"}`);
+        const f = Number(found);
+        const base = a < f ? `${a} of ${f} assets` : `${a} asset${a === 1 ? "" : "s"}`;
+        setInfo(a < 2 && shape ? `${base} · ${shape}` : base);
       }
-      setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 4000);
+      setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 8000);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Download failed");
@@ -97,7 +104,9 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
         </span>
       )}
       {status === "success" && info && (
-        <span className="text-[10px] text-winner leading-tight">{info}</span>
+        <span className="text-[10px] text-winner leading-tight max-w-[200px] text-right break-words">
+          {info}
+        </span>
       )}
     </div>
   );
