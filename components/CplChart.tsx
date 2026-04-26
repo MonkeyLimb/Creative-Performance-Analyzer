@@ -12,6 +12,12 @@ import {
 } from "recharts";
 import { Creative, Thresholds } from "@/lib/types";
 import { classify } from "@/lib/tiers";
+import {
+  CreativeMatchOverrides,
+  RplOverrides,
+  SCHOOL_REGISTRY,
+  deriveRoas,
+} from "@/lib/schools";
 
 const STATUS_COLOR: Record<string, string> = {
   winner: "#1D9E75",
@@ -24,10 +30,18 @@ export type TopN = 5 | 10 | 20 | "all";
 type Props = {
   creatives: Creative[];
   thresholds: Thresholds;
+  rplOverrides: RplOverrides;
+  matchOverrides: CreativeMatchOverrides;
   topN?: TopN;
 };
 
-export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
+export function CplChart({
+  creatives,
+  thresholds,
+  rplOverrides,
+  matchOverrides,
+  topN = 10,
+}: Props) {
   const sorted = creatives
     .filter((c) => c.cpl != null && (c.cpl as number) > 0)
     .sort((a, b) => (a.cpl as number) - (b.cpl as number));
@@ -35,12 +49,15 @@ export function CplChart({ creatives, thresholds, topN = 10 }: Props) {
   const limited = topN === "all" ? sorted : sorted.slice(0, topN);
   const prefix = commonPrefix(limited.map((c) => c.adName));
 
-  const data = limited.map((c) => ({
-    name: smartTruncate(c.adName, prefix, 32),
-    fullName: c.adName,
-    cpl: Number((c.cpl as number).toFixed(2)),
-    status: classify(c, thresholds),
-  }));
+  const data = limited.map((c) => {
+    const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
+    return {
+      name: smartTruncate(c.adName, prefix, 32),
+      fullName: c.adName,
+      cpl: Number((c.cpl as number).toFixed(2)),
+      status: classify(c, thresholds, r.roas),
+    };
+  });
 
   if (data.length === 0) {
     return (

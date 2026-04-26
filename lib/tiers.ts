@@ -1,7 +1,19 @@
 import { Creative, TierStatus, Thresholds } from "./types";
 
-export function classify(c: Creative, t: Thresholds): TierStatus {
+export function classify(
+  c: Creative,
+  t: Thresholds,
+  roas: number | null = null,
+): TierStatus {
+  // Spending with zero leads is always a cut, regardless of ROAS source.
   if (c.spend > 0 && c.results === 0) return "cut";
+  // Prefer ROAS classification when we have it (a school match + RPL).
+  if (roas != null) {
+    if (roas >= t.winnerRoas) return "winner";
+    if (roas < t.cutRoas) return "cut";
+    return "watch";
+  }
+  // Fallback to CPL when no ROAS is available (creative isn't tied to a school).
   if (c.cpl == null) return "watch";
   if (c.cpl <= t.winnerCpl) return "winner";
   if (c.cpl >= t.cutCpl) return "cut";

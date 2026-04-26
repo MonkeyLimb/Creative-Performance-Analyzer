@@ -160,28 +160,10 @@ export function Sidebar({
         </Hint>
       </Section>
 
-      <Section title="Thresholds">
-        <Field label="Winner CPL ≤">
-          <NumberInput
-            value={thresholds.winnerCpl}
-            onChange={(v) =>
-              onThresholdsChange({ ...thresholds, winnerCpl: v })
-            }
-            prefix="$"
-            min={0}
-          />
-        </Field>
-        <Field label="Cut CPL ≥">
-          <NumberInput
-            value={thresholds.cutCpl}
-            onChange={(v) =>
-              onThresholdsChange({ ...thresholds, cutCpl: v })
-            }
-            prefix="$"
-            min={0}
-          />
-        </Field>
-      </Section>
+      <ThresholdsSection
+        thresholds={thresholds}
+        onThresholdsChange={onThresholdsChange}
+      />
 
       <Section title="Chart">
         <Field label="Top N in CPL chart">
@@ -300,12 +282,16 @@ function NumberInput({
   value,
   onChange,
   prefix,
+  suffix,
   min,
+  step,
 }: {
   value: number;
   onChange: (v: number) => void;
   prefix?: string;
+  suffix?: string;
   min?: number;
+  step?: number;
 }) {
   return (
     <div className="relative">
@@ -314,20 +300,98 @@ function NumberInput({
           {prefix}
         </span>
       )}
+      {suffix && (
+        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-textDim text-[13px] font-mono pointer-events-none">
+          {suffix}
+        </span>
+      )}
       <input
         type="number"
         inputMode="decimal"
         min={min}
+        step={step}
         value={Number.isFinite(value) ? value : ""}
         onChange={(e) => {
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onChange(n);
         }}
         className={`w-full bg-surface2 border border-border rounded-md py-2 text-[13px] font-mono tabular-nums focus:outline-none focus:border-accent ${
-          prefix ? "pl-6 pr-2.5" : "px-2.5"
-        }`}
+          prefix ? "pl-6" : "pl-2.5"
+        } ${suffix ? "pr-6" : "pr-2.5"}`}
       />
     </div>
+  );
+}
+
+function ThresholdsSection({
+  thresholds,
+  onThresholdsChange,
+}: {
+  thresholds: Thresholds;
+  onThresholdsChange: (t: Thresholds) => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  return (
+    <Section
+      title="Tier thresholds"
+      action={
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="text-[10px] uppercase tracking-[0.05em] text-textDim hover:text-text transition-colors"
+        >
+          {showAdvanced ? "Hide CPL" : "Advanced"}
+        </button>
+      }
+    >
+      <Field label="Winner ROAS ≥">
+        <NumberInput
+          value={thresholds.winnerRoas}
+          onChange={(v) =>
+            onThresholdsChange({ ...thresholds, winnerRoas: v })
+          }
+          suffix="×"
+          min={0}
+          step={0.1}
+        />
+      </Field>
+      <Field label="Cut ROAS <">
+        <NumberInput
+          value={thresholds.cutRoas}
+          onChange={(v) => onThresholdsChange({ ...thresholds, cutRoas: v })}
+          suffix="×"
+          min={0}
+          step={0.1}
+        />
+      </Field>
+      {showAdvanced && (
+        <>
+          <div className="text-[10px] text-textDim leading-[1.4] mt-1">
+            CPL fallback used only when a creative has no school match.
+          </div>
+          <Field label="Winner CPL ≤">
+            <NumberInput
+              value={thresholds.winnerCpl}
+              onChange={(v) =>
+                onThresholdsChange({ ...thresholds, winnerCpl: v })
+              }
+              prefix="$"
+              min={0}
+            />
+          </Field>
+          <Field label="Cut CPL ≥">
+            <NumberInput
+              value={thresholds.cutCpl}
+              onChange={(v) =>
+                onThresholdsChange({ ...thresholds, cutCpl: v })
+              }
+              prefix="$"
+              min={0}
+            />
+          </Field>
+        </>
+      )}
+    </Section>
   );
 }
 

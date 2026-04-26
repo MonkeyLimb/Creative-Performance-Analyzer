@@ -40,11 +40,15 @@ export type Creative = {
 export type Thresholds = {
   winnerCpl: number;
   cutCpl: number;
+  winnerRoas: number;
+  cutRoas: number;
 };
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
   winnerCpl: 20,
   cutCpl: 50,
+  winnerRoas: 2,
+  cutRoas: 1,
 };
 
 export type AdAccount = {
