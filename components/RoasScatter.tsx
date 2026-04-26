@@ -2,6 +2,7 @@
 
 import {
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart as RScatter,
@@ -10,8 +11,7 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
-import { Creative, Thresholds, TierStatus } from "@/lib/types";
-import { classify } from "@/lib/tiers";
+import { Creative } from "@/lib/types";
 import {
   CreativeMatchOverrides,
   RplOverrides,
@@ -19,15 +19,8 @@ import {
   deriveRoas,
 } from "@/lib/schools";
 
-const STATUS_COLOR: Record<TierStatus, string> = {
-  winner: "#1D9E75",
-  watch: "#EF9F27",
-  cut: "#E24B4A",
-};
-
 type Props = {
   creatives: Creative[];
-  thresholds: Thresholds;
   rplOverrides: RplOverrides;
   matchOverrides: CreativeMatchOverrides;
 };
@@ -36,38 +29,48 @@ type Point = {
   x: number;
   y: number;
   name: string;
-  cpl: number | null;
+  school: string;
+  revenue: number;
 };
 
-export function SpendVsLeadsScatter({
+function roasColor(roas: number): string {
+  if (roas >= 2) return "#1D9E75";
+  if (roas >= 1) return "#EF9F27";
+  return "#E24B4A";
+}
+
+export function RoasScatter({
   creatives,
-  thresholds,
   rplOverrides,
   matchOverrides,
 }: Props) {
-  const byStatus: Record<TierStatus, Point[]> = {
+  const groups: { winner: Point[]; watch: Point[]; cut: Point[] } = {
     winner: [],
     watch: [],
     cut: [],
   };
 
   for (const c of creatives) {
-    if (c.spend <= 0 && c.results <= 0) continue;
+    if (c.spend <= 0) continue;
     const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
-    const status = classify(c, thresholds, r.roas);
-    byStatus[status].push({
+    if (r.roas == null) continue;
+    const point: Point = {
       x: c.spend,
-      y: c.results,
+      y: Number((r.roas as number).toFixed(2)),
       name: c.adName,
-      cpl: c.cpl,
-    });
+      school: r.match?.school ?? "—",
+      revenue: r.revenue ?? 0,
+    };
+    if (r.roas >= 2) groups.winner.push(point);
+    else if (r.roas >= 1) groups.watch.push(point);
+    else groups.cut.push(point);
   }
 
-  const total = Object.values(byStatus).reduce((s, arr) => s + arr.length, 0);
+  const total = groups.winner.length + groups.watch.length + groups.cut.length;
   if (total === 0) {
     return (
-      <div className="h-80 flex items-center justify-center text-sm text-textDim">
-        No scatter data yet
+      <div className="h-80 flex items-center justify-center text-sm text-textDim text-center px-6">
+        Add school keywords to ad names to see ROAS scatter.
       </div>
     );
   }
@@ -94,10 +97,11 @@ export function SpendVsLeadsScatter({
           <YAxis
             type="number"
             dataKey="y"
-            name="Leads"
+            name="ROAS"
             tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
+            tickFormatter={(v) => `${v}×`}
             label={{
-              value: "Leads",
+              value: "ROAS",
               angle: -90,
               position: "insideLeft",
               offset: 16,
@@ -106,6 +110,17 @@ export function SpendVsLeadsScatter({
             }}
           />
           <ZAxis range={[60, 60]} />
+          <ReferenceLine
+            y={1}
+            stroke="var(--color-textDim)"
+            strokeDasharray="2 4"
+            label={{
+              value: "break-even",
+              position: "right",
+              fill: "var(--color-textDim)",
+              fontSize: 9,
+            }}
+          />
           <Tooltip
             cursor={{ stroke: "var(--color-grid)", strokeDasharray: "3 3" }}
             content={({ payload }) => {
@@ -114,21 +129,20 @@ export function SpendVsLeadsScatter({
               return (
                 <div className="chart-tooltip rounded px-2.5 py-1.5 text-xs max-w-[260px]">
                   <div className="break-all mb-0.5">{p.name}</div>
-                  <div className="font-mono tabular-nums text-textDim">
-                    Spend ${p.x.toFixed(2)} · Leads {p.y}
-                    {p.cpl != null && ` · CPL $${p.cpl.toFixed(2)}`}
+                  <div className="text-[10px] text-textDim mt-0.5">
+                    {p.school}
+                  </div>
+                  <div className="font-mono tabular-nums text-textDim mt-0.5">
+                    Spend ${p.x.toFixed(2)} · ROAS {p.y.toFixed(2)}× · $
+                    {p.revenue.toFixed(0)} rev
                   </div>
                 </div>
               );
             }}
           />
-          {(Object.keys(byStatus) as TierStatus[]).map((status) => (
-            <Scatter
-              key={status}
-              data={byStatus[status]}
-              fill={STATUS_COLOR[status]}
-            />
-          ))}
+          <Scatter data={groups.cut} fill={roasColor(0)} />
+          <Scatter data={groups.watch} fill={roasColor(1)} />
+          <Scatter data={groups.winner} fill={roasColor(2)} />
         </RScatter>
       </ResponsiveContainer>
     </div>

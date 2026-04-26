@@ -11,13 +11,13 @@ const LABELS: Record<DeliveryStatus, string> = {
 };
 
 const COLORS: Record<DeliveryStatus, string> = {
-  active: "#1D9E75",
-  inactive: "#8a8a92",
-  paused: "#EF9F27",
-  completed: "#8a8a92",
-  rejected: "#E24B4A",
-  in_review: "#6b5fff",
-  unknown: "#8a8a92",
+  active: "var(--color-winner)",
+  inactive: "var(--color-textDim)",
+  paused: "var(--color-watch)",
+  completed: "var(--color-textDim)",
+  rejected: "var(--color-cut)",
+  in_review: "var(--color-accent)",
+  unknown: "var(--color-textDim)",
 };
 
 export function DeliveryBadge({ status }: { status: DeliveryStatus }) {

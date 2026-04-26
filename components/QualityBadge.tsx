@@ -10,12 +10,12 @@ const LABELS: Record<QualityRanking, string> = {
 };
 
 const COLORS: Record<QualityRanking, string> = {
-  above_average: "#1D9E75",
-  average: "#8a8a92",
-  below_average_35: "#EF9F27",
-  below_average_20: "#EF9F27",
-  below_average_10: "#E24B4A",
-  unknown: "#2a2a2e",
+  above_average: "var(--color-winner)",
+  average: "var(--color-textDim)",
+  below_average_35: "var(--color-watch)",
+  below_average_20: "var(--color-watch)",
+  below_average_10: "var(--color-cut)",
+  unknown: "var(--color-border)",
 };
 
 export function QualityBadge({ rank }: { rank: QualityRanking }) {

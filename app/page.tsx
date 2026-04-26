@@ -12,12 +12,16 @@ import { parseCsv } from "@/lib/csv";
 import { classify } from "@/lib/tiers";
 import {
   loadAccount,
+  loadChartOrder,
   loadMatchOverrides,
   loadRplOverrides,
+  loadSidebarCollapsed,
   loadThresholds,
   saveAccount,
+  saveChartOrder,
   saveMatchOverrides,
   saveRplOverrides,
+  saveSidebarCollapsed,
   saveThresholds,
 } from "@/lib/storage";
 import { loadMetaToken, saveMetaToken } from "@/lib/meta-token";
@@ -30,6 +34,8 @@ import {
   SCHOOL_REGISTRY,
   deriveRoas,
 } from "@/lib/schools";
+import { useTheme } from "@/lib/theme";
+import { ReportRow, ReportSummary } from "@/lib/report";
 import { Sidebar } from "@/components/Sidebar";
 import { EmptyState } from "@/components/EmptyState";
 import { MetricCard } from "@/components/MetricCard";
@@ -37,11 +43,14 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CplChart, TopN } from "@/components/CplChart";
 import { SpendVsLeadsScatter } from "@/components/ScatterChart";
 import { RoasChart } from "@/components/RoasChart";
+import { RoasScatter } from "@/components/RoasScatter";
 import {
   CreativesTable,
   DeliveryFilter,
 } from "@/components/CreativesTable";
 import { InsightCallout } from "@/components/InsightCallout";
+import { DraggableCharts, ChartPanel } from "@/components/DraggableCharts";
+import { ExportMenu } from "@/components/ExportMenu";
 
 const TIER_FILTERS: Array<TierStatus | "all"> = [
   "all",
@@ -51,7 +60,15 @@ const TIER_FILTERS: Array<TierStatus | "all"> = [
 ];
 const DELIVERY_FILTERS: DeliveryFilter[] = ["all", "active", "inactive"];
 
+const DEFAULT_CHART_ORDER = [
+  "cpl",
+  "roas-bar",
+  "spend-leads",
+  "roas-scatter",
+];
+
 export default function DashboardPage() {
+  const { theme, toggle: toggleTheme } = useTheme();
   const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
   const [account, setAccount] = useState<AdAccount>({ actId: "" });
   const [metaToken, setMetaToken] = useState<string>("");
@@ -65,6 +82,8 @@ export default function DashboardPage() {
     useState<RplOverrides>(EMPTY_RPL_OVERRIDES);
   const [matchOverrides, setMatchOverrides] =
     useState<CreativeMatchOverrides>({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [chartOrder, setChartOrder] = useState<string[]>(DEFAULT_CHART_ORDER);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -74,6 +93,17 @@ export default function DashboardPage() {
     setMetaToken(loadMetaToken());
     setRplOverrides(loadRplOverrides());
     setMatchOverrides(loadMatchOverrides());
+    const storedCollapsed = window.localStorage.getItem(
+      "cpa.sidebar.collapsed.v1",
+    );
+    if (storedCollapsed == null) {
+      // First visit: auto-collapse on phones/small tablets so content has room.
+      setSidebarCollapsed(window.innerWidth < 768);
+    } else {
+      setSidebarCollapsed(loadSidebarCollapsed());
+    }
+    const stored = loadChartOrder();
+    if (stored.length) setChartOrder(stored);
     setHydrated(true);
   }, []);
 
@@ -96,6 +126,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveMatchOverrides(matchOverrides);
   }, [matchOverrides, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveSidebarCollapsed(sidebarCollapsed);
+  }, [sidebarCollapsed, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveChartOrder(chartOrder);
+  }, [chartOrder, hydrated]);
 
   const handleAnalyze = () => {
     if (!csvText.trim()) {
@@ -124,7 +162,7 @@ export default function DashboardPage() {
       return {
         creative: c,
         status: classify(c, thresholds, r.roas),
-        roas: r.roas,
+        roas: r,
       };
     });
   }, [creatives, thresholds, rplOverrides, matchOverrides]);
@@ -148,6 +186,9 @@ export default function DashboardPage() {
     const winners = decorated
       .filter((d) => d.status === "winner")
       .map((d) => d.creative);
+    const watch = decorated
+      .filter((d) => d.status === "watch")
+      .map((d) => d.creative);
     const cuts = decorated
       .filter((d) => d.status === "cut")
       .map((d) => d.creative);
@@ -156,11 +197,10 @@ export default function DashboardPage() {
     const winnerShare =
       totalResults > 0 ? (winnerResults / totalResults) * 100 : 0;
     const activeCount = creatives.filter((c) => c.delivery === "active").length;
-    // Top performer = highest ROAS among winners; fall back to lowest CPL.
     const winnersWithRoas = decorated.filter((d) => d.status === "winner");
     const byRoas = winnersWithRoas
-      .filter((d) => d.roas != null)
-      .sort((a, b) => (b.roas as number) - (a.roas as number));
+      .filter((d) => d.roas.roas != null)
+      .sort((a, b) => (b.roas.roas as number) - (a.roas.roas as number));
     const byCpl = winnersWithRoas
       .filter((d) => d.creative.cpl != null)
       .sort(
@@ -174,6 +214,7 @@ export default function DashboardPage() {
       blendedCpl,
       blendedRoas,
       winners,
+      watch,
       cuts,
       cutSpend,
       winnerShare,
@@ -182,10 +223,96 @@ export default function DashboardPage() {
     };
   }, [creatives, decorated, rplOverrides, matchOverrides]);
 
+  const reportRows: ReportRow[] = useMemo(
+    () =>
+      decorated.map((d) => ({
+        creative: d.creative,
+        status: d.status,
+        rpl: d.roas.rpl,
+        revenue: d.roas.revenue,
+        roas: d.roas.roas,
+        school: d.roas.match?.school ?? null,
+        program: d.roas.match?.program ?? null,
+      })),
+    [decorated],
+  );
+
+  const reportSummary: ReportSummary | null = useMemo(() => {
+    if (!metrics) return null;
+    return {
+      totalSpend: metrics.totalSpend,
+      totalResults: metrics.totalResults,
+      totalRevenue: metrics.totalRevenue,
+      blendedCpl: metrics.blendedCpl,
+      blendedRoas: metrics.blendedRoas,
+      winners: metrics.winners.length,
+      watch: metrics.watch.length,
+      cuts: metrics.cuts.length,
+      cutSpend: metrics.cutSpend,
+      winnerShare: metrics.winnerShare,
+      activeCount: metrics.activeCount,
+      topPerformer: metrics.topPerformer?.adName ?? null,
+    };
+  }, [metrics]);
+
   const hasAdIds = !!creatives?.some((c) => c.adId);
 
+  const chartPanels: ChartPanel[] = useMemo(() => {
+    if (!creatives) return [];
+    return [
+      {
+        id: "cpl",
+        title: `CPL by creative (top ${topN === "all" ? "all" : topN})`,
+        render: () => (
+          <CplChart
+            creatives={creatives}
+            thresholds={thresholds}
+            rplOverrides={rplOverrides}
+            matchOverrides={matchOverrides}
+            topN={topN}
+          />
+        ),
+      },
+      {
+        id: "roas-bar",
+        title: `ROAS by creative (top ${topN === "all" ? "all" : topN})`,
+        render: () => (
+          <RoasChart
+            creatives={creatives}
+            rplOverrides={rplOverrides}
+            matchOverrides={matchOverrides}
+            topN={topN}
+          />
+        ),
+      },
+      {
+        id: "spend-leads",
+        title: "Spend vs Leads",
+        render: () => (
+          <SpendVsLeadsScatter
+            creatives={creatives}
+            thresholds={thresholds}
+            rplOverrides={rplOverrides}
+            matchOverrides={matchOverrides}
+          />
+        ),
+      },
+      {
+        id: "roas-scatter",
+        title: "Spend vs ROAS",
+        render: () => (
+          <RoasScatter
+            creatives={creatives}
+            rplOverrides={rplOverrides}
+            matchOverrides={matchOverrides}
+          />
+        ),
+      },
+    ];
+  }, [creatives, thresholds, rplOverrides, matchOverrides, topN]);
+
   return (
-    <div className="flex">
+    <div className="flex min-h-screen w-full">
       <Sidebar
         thresholds={thresholds}
         onThresholdsChange={setThresholds}
@@ -205,32 +332,43 @@ export default function DashboardPage() {
         creativesCount={creatives?.length ?? 0}
         rplOverrides={rplOverrides}
         onRplOverridesChange={setRplOverrides}
+        collapsed={sidebarCollapsed}
+        onCollapsedChange={setSidebarCollapsed}
+        theme={theme}
+        onThemeToggle={toggleTheme}
       />
 
-      <main className="flex-1 min-w-0">
-        {!creatives || !metrics ? (
+      <main className="flex-1 min-w-0 w-full">
+        {!creatives || !metrics || !reportSummary ? (
           <EmptyState />
         ) : (
-          <div className="p-6 flex flex-col gap-5 max-w-[1400px]">
-            <header>
-              <h1 className="text-xl font-semibold tracking-tight">
-                Dashboard
-              </h1>
-              <p className="text-sm text-textDim mt-0.5">
-                {creatives.length} creative
-                {creatives.length === 1 ? "" : "s"} ·{" "}
-                <span className="font-mono tabular-nums">
-                  {fmtCurrency(metrics.totalSpend)}
-                </span>{" "}
-                spend ·{" "}
-                <span className="font-mono tabular-nums">
-                  {fmtNumber(metrics.totalResults)}
-                </span>{" "}
-                leads
-              </p>
+          <div className="p-3 sm:p-4 md:p-6 flex flex-col gap-4 md:gap-5 w-full">
+            <header className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Dashboard
+                </h1>
+                <p className="text-sm text-textDim mt-0.5">
+                  {creatives.length} creative
+                  {creatives.length === 1 ? "" : "s"} ·{" "}
+                  <span className="font-mono tabular-nums">
+                    {fmtCurrency(metrics.totalSpend)}
+                  </span>{" "}
+                  spend ·{" "}
+                  <span className="font-mono tabular-nums">
+                    {fmtNumber(metrics.totalResults)}
+                  </span>{" "}
+                  leads
+                </p>
+              </div>
+              <ExportMenu
+                rows={reportRows}
+                summary={reportSummary}
+                thresholds={thresholds}
+              />
             </header>
 
-            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+            <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2.5 sm:gap-3">
               <MetricCard
                 label="Total spend"
                 value={fmtCurrency(metrics.totalSpend)}
@@ -254,10 +392,10 @@ export default function DashboardPage() {
                 accent={
                   metrics.blendedRoas != null
                     ? metrics.blendedRoas >= 2
-                      ? "#1D9E75"
+                      ? "var(--color-winner)"
                       : metrics.blendedRoas >= 1
-                        ? "#EF9F27"
-                        : "#E24B4A"
+                        ? "var(--color-watch)"
+                        : "var(--color-cut)"
                     : undefined
                 }
               />
@@ -265,13 +403,13 @@ export default function DashboardPage() {
                 label="Winners"
                 value={fmtNumber(metrics.winners.length)}
                 hint={`${creatives.length} total`}
-                accent="#1D9E75"
+                accent="var(--color-winner)"
               />
               <MetricCard
                 label="Cut list"
                 value={fmtNumber(metrics.cuts.length)}
                 hint={`${fmtCurrency(metrics.cutSpend)} wasted`}
-                accent="#E24B4A"
+                accent="var(--color-cut)"
               />
               <MetricCard
                 label="Active now"
@@ -289,41 +427,26 @@ export default function DashboardPage() {
               hasAnyLeads={metrics.totalResults > 0}
             />
 
-            <section
-              className="overflow-x-auto -mx-6 px-6 pb-2"
-              aria-label="Performance charts"
-            >
-              <div className="flex gap-3 min-w-max">
-                <ScrollPanel
-                  title={`CPL by creative (top ${topN === "all" ? "all" : topN})`}
-                >
-                  <CplChart
-                    creatives={creatives}
-                    thresholds={thresholds}
-                    rplOverrides={rplOverrides}
-                    matchOverrides={matchOverrides}
-                    topN={topN}
-                  />
-                </ScrollPanel>
-                <ScrollPanel
-                  title={`ROAS by creative (top ${topN === "all" ? "all" : topN})`}
-                >
-                  <RoasChart
-                    creatives={creatives}
-                    rplOverrides={rplOverrides}
-                    matchOverrides={matchOverrides}
-                    topN={topN}
-                  />
-                </ScrollPanel>
-                <ScrollPanel title="Spend vs Leads">
-                  <SpendVsLeadsScatter
-                    creatives={creatives}
-                    thresholds={thresholds}
-                    rplOverrides={rplOverrides}
-                    matchOverrides={matchOverrides}
-                  />
-                </ScrollPanel>
+            <section aria-label="Performance charts">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs uppercase tracking-wider text-textDim">
+                  Charts · drag to reorder
+                </div>
+                {chartOrder.join(",") !== DEFAULT_CHART_ORDER.join(",") && (
+                  <button
+                    type="button"
+                    onClick={() => setChartOrder(DEFAULT_CHART_ORDER)}
+                    className="text-[10px] uppercase tracking-[0.05em] text-textDim hover:text-text transition-colors"
+                  >
+                    Reset order
+                  </button>
+                )}
               </div>
+              <DraggableCharts
+                panels={chartPanels}
+                order={chartOrder}
+                onOrderChange={setChartOrder}
+              />
             </section>
 
             <section className="flex flex-col gap-3">
@@ -369,40 +492,6 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-surface border border-border rounded-lg p-[18px]">
-      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ScrollPanel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-surface border border-border rounded-lg p-[18px] w-[560px] shrink-0">
-      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
-        {title}
-      </div>
-      {children}
     </div>
   );
 }

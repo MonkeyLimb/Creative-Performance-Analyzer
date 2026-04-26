@@ -4,9 +4,21 @@ const META: Record<
   TierStatus,
   { label: string; color: string; bg: string }
 > = {
-  winner: { label: "Winner", color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
-  watch: { label: "Watch", color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
-  cut: { label: "Cut", color: "#E24B4A", bg: "rgba(226,75,74,0.15)" },
+  winner: {
+    label: "Winner",
+    color: "var(--color-winner)",
+    bg: "color-mix(in srgb, var(--color-winner) 15%, transparent)",
+  },
+  watch: {
+    label: "Watch",
+    color: "var(--color-watch)",
+    bg: "color-mix(in srgb, var(--color-watch) 15%, transparent)",
+  },
+  cut: {
+    label: "Cut",
+    color: "var(--color-cut)",
+    bg: "color-mix(in srgb, var(--color-cut) 15%, transparent)",
+  },
 };
 
 export function StatusBadge({ status }: { status: TierStatus }) {

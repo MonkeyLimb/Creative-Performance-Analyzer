@@ -80,31 +80,31 @@ export function RoasChart({
           barCategoryGap={6}
         >
           <CartesianGrid
-            stroke="#2a2a2e"
+            stroke="var(--color-grid)"
             strokeDasharray="3 3"
             horizontal={false}
           />
           <XAxis
             type="number"
             domain={[0, "dataMax"]}
-            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
             tickFormatter={(v) => `${v}×`}
           />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
             width={200}
             interval={0}
           />
           <ReferenceLine
             x={1}
-            stroke="#8a8a92"
+            stroke="var(--color-textDim)"
             strokeDasharray="2 4"
             label={{
               value: "break-even",
               position: "top",
-              fill: "#8a8a92",
+              fill: "var(--color-textDim)",
               fontSize: 9,
             }}
           />
@@ -121,8 +121,8 @@ export function RoasChart({
                 spend: number;
               };
               return (
-                <div className="bg-surface2 border border-border rounded px-2.5 py-1.5 text-xs max-w-xs">
-                  <div className="text-text break-all">{p.fullName}</div>
+                <div className="chart-tooltip rounded px-2.5 py-1.5 text-xs max-w-xs">
+                  <div className="break-all">{p.fullName}</div>
                   <div className="text-[10px] text-textDim mt-0.5">
                     {p.school}
                     {p.program ? ` · ${p.program}` : ""}
