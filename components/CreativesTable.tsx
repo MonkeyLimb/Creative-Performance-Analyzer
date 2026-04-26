@@ -8,6 +8,7 @@ import { fmtCurrency, fmtNumber, fmtPct } from "@/lib/format";
 import { StatusBadge } from "./StatusBadge";
 import { DeliveryBadge } from "./DeliveryBadge";
 import { QualityBadge } from "./QualityBadge";
+import { DownloadCreativeButton } from "./DownloadCreativeButton";
 
 type SortKey =
   | "status"
@@ -26,6 +27,7 @@ type Props = {
   deliveryFilter: DeliveryFilter;
   account: AdAccount;
   hasAdIds: boolean;
+  metaToken: string;
 };
 
 const STATUS_RANK: Record<TierStatus, number> = {
@@ -47,6 +49,7 @@ export function CreativesTable({
   deliveryFilter,
   account,
   hasAdIds,
+  metaToken,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "spend",
@@ -170,6 +173,9 @@ export function CreativesTable({
                 align="right"
               />
               <th className="px-3 py-2.5 text-left">Quality</th>
+              <th className="px-3 py-2.5 text-right w-[1%] whitespace-nowrap">
+                Asset
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -225,6 +231,13 @@ export function CreativesTable({
                 </td>
                 <td className="px-3 py-2.5">
                   <QualityBadge rank={c.quality} />
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <DownloadCreativeButton
+                    adId={c.adId}
+                    adName={c.adName}
+                    token={metaToken}
+                  />
                 </td>
               </tr>
             ))}

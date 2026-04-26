@@ -9,6 +9,8 @@ type Props = {
   onThresholdsChange: (t: Thresholds) => void;
   account: AdAccount;
   onAccountChange: (a: AdAccount) => void;
+  metaToken: string;
+  onMetaTokenChange: (v: string) => void;
   topN: TopN;
   onTopNChange: (t: TopN) => void;
   csvText: string;
@@ -26,6 +28,8 @@ export function Sidebar({
   onThresholdsChange,
   account,
   onAccountChange,
+  metaToken,
+  onMetaTokenChange,
   topN,
   onTopNChange,
   csvText,
@@ -86,6 +90,30 @@ export function Sidebar({
           <Hint>
             Find as <code className="font-mono">business_id=</code> in URL.
             Helps if you manage multiple businesses.
+          </Hint>
+        </Field>
+      </Section>
+
+      <Section title="Meta token (optional)">
+        <Field label="Access token">
+          <TextInput
+            placeholder="Paste long token here…"
+            value={metaToken}
+            onChange={onMetaTokenChange}
+            type="password"
+          />
+          <Hint>
+            Enables per-row creative downloads. Get a token from{" "}
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              Graph API Explorer
+            </a>{" "}
+            with <code className="font-mono">ads_read</code> scope. Stored in
+            this browser only.
           </Hint>
         </Field>
       </Section>
@@ -292,17 +320,21 @@ function TextInput({
   value,
   onChange,
   placeholder,
+  type = "text",
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  type?: "text" | "password";
 }) {
   return (
     <input
-      type="text"
+      type={type}
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
+      autoComplete="off"
+      spellCheck={false}
       className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent"
     />
   );
