@@ -76,12 +76,15 @@ export function CreativesTable({
 
   const decorated = useMemo(
     () =>
-      creatives.map((c) => ({
-        creative: c,
-        status: classify(c, thresholds),
-        roas: deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides),
-        key: creativeMatchKey(c),
-      })),
+      creatives.map((c) => {
+        const roas = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
+        return {
+          creative: c,
+          status: classify(c, thresholds, roas.roas),
+          roas,
+          key: creativeMatchKey(c),
+        };
+      }),
     [creatives, thresholds, rplOverrides, matchOverrides],
   );
 

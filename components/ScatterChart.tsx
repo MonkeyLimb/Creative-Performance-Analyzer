@@ -12,6 +12,12 @@ import {
 } from "recharts";
 import { Creative, Thresholds, TierStatus } from "@/lib/types";
 import { classify } from "@/lib/tiers";
+import {
+  CreativeMatchOverrides,
+  RplOverrides,
+  SCHOOL_REGISTRY,
+  deriveRoas,
+} from "@/lib/schools";
 
 const STATUS_COLOR: Record<TierStatus, string> = {
   winner: "#1D9E75",
@@ -22,6 +28,8 @@ const STATUS_COLOR: Record<TierStatus, string> = {
 type Props = {
   creatives: Creative[];
   thresholds: Thresholds;
+  rplOverrides: RplOverrides;
+  matchOverrides: CreativeMatchOverrides;
 };
 
 type Point = {
@@ -31,7 +39,12 @@ type Point = {
   cpl: number | null;
 };
 
-export function SpendVsLeadsScatter({ creatives, thresholds }: Props) {
+export function SpendVsLeadsScatter({
+  creatives,
+  thresholds,
+  rplOverrides,
+  matchOverrides,
+}: Props) {
   const byStatus: Record<TierStatus, Point[]> = {
     winner: [],
     watch: [],
@@ -40,7 +53,8 @@ export function SpendVsLeadsScatter({ creatives, thresholds }: Props) {
 
   for (const c of creatives) {
     if (c.spend <= 0 && c.results <= 0) continue;
-    const status = classify(c, thresholds);
+    const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
+    const status = classify(c, thresholds, r.roas);
     byStatus[status].push({
       x: c.spend,
       y: c.results,

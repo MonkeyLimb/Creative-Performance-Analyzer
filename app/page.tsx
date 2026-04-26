@@ -119,11 +119,15 @@ export default function DashboardPage() {
 
   const decorated = useMemo(() => {
     if (!creatives) return [];
-    return creatives.map((c) => ({
-      creative: c,
-      status: classify(c, thresholds),
-    }));
-  }, [creatives, thresholds]);
+    return creatives.map((c) => {
+      const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
+      return {
+        creative: c,
+        status: classify(c, thresholds, r.roas),
+        roas: r.roas,
+      };
+    });
+  }, [creatives, thresholds, rplOverrides, matchOverrides]);
 
   const metrics = useMemo(() => {
     if (!creatives || creatives.length === 0) return null;
@@ -152,10 +156,17 @@ export default function DashboardPage() {
     const winnerShare =
       totalResults > 0 ? (winnerResults / totalResults) * 100 : 0;
     const activeCount = creatives.filter((c) => c.delivery === "active").length;
-    const topPerformer =
-      [...winners]
-        .filter((c) => c.cpl != null)
-        .sort((a, b) => (a.cpl as number) - (b.cpl as number))[0] ?? null;
+    // Top performer = highest ROAS among winners; fall back to lowest CPL.
+    const winnersWithRoas = decorated.filter((d) => d.status === "winner");
+    const byRoas = winnersWithRoas
+      .filter((d) => d.roas != null)
+      .sort((a, b) => (b.roas as number) - (a.roas as number));
+    const byCpl = winnersWithRoas
+      .filter((d) => d.creative.cpl != null)
+      .sort(
+        (a, b) => (a.creative.cpl as number) - (b.creative.cpl as number),
+      );
+    const topPerformer = (byRoas[0] ?? byCpl[0])?.creative ?? null;
     return {
       totalSpend,
       totalResults,
@@ -289,6 +300,8 @@ export default function DashboardPage() {
                   <CplChart
                     creatives={creatives}
                     thresholds={thresholds}
+                    rplOverrides={rplOverrides}
+                    matchOverrides={matchOverrides}
                     topN={topN}
                   />
                 </ScrollPanel>
@@ -306,6 +319,8 @@ export default function DashboardPage() {
                   <SpendVsLeadsScatter
                     creatives={creatives}
                     thresholds={thresholds}
+                    rplOverrides={rplOverrides}
+                    matchOverrides={matchOverrides}
                   />
                 </ScrollPanel>
               </div>
