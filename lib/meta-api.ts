@@ -223,9 +223,18 @@ async function graphGet<T>(path: string, token: string, params: Record<string, s
 }
 
 export async function fetchAd(adId: string, token: string): Promise<MetaAd> {
+  const creativeFields = [
+    "id",
+    "object_type",
+    "image_url",
+    "image_hash",
+    "video_id",
+    "thumbnail_url",
+    "object_story_spec{link_data{picture,image_hash,video_id,child_attachments.limit(50){picture,image_hash,video_id}},video_data{video_id,image_hash,image_url}}",
+    "asset_feed_spec{images.limit(100){hash,url},videos.limit(100){video_id,thumbnail_url,thumbnail_hash}}",
+  ].join(",");
   return graphGet<MetaAd>(adId, token, {
-    fields:
-      "name,account_id,creative{id,object_type,image_url,image_hash,video_id,thumbnail_url,object_story_spec,asset_feed_spec}",
+    fields: `name,account_id,creative{${creativeFields}}`,
   });
 }
 
@@ -248,6 +257,7 @@ export async function resolveImageHashes(
   }>(`${act}/adimages`, token, {
     fields: "hash,url,permalink_url",
     hashes: JSON.stringify(hashes),
+    limit: "200",
   });
   for (const img of json.data || []) {
     if (img.hash && (img.url || img.permalink_url)) {

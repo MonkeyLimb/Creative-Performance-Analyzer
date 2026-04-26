@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Status = "idle" | "loading" | "error";
+type Status = "idle" | "loading" | "success" | "error";
 
 type Props = {
   adId?: string;
@@ -13,6 +13,7 @@ type Props = {
 export function DownloadCreativeButton({ adId, adName, token }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const disabled = !adId || !token || status === "loading";
   const tooltip = !adId
@@ -28,6 +29,7 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
     if (disabled || !adId) return;
     setStatus("loading");
     setError(null);
+    setInfo(null);
     try {
       const res = await fetch("/api/meta/asset", {
         method: "POST",
@@ -48,10 +50,18 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
         if (res.status === 401) msg = "Meta token expired or invalid — refresh it.";
         throw new Error(msg);
       }
+      const found = res.headers.get("x-asset-found");
+      const added = res.headers.get("x-asset-added");
       const blob = await res.blob();
       const filename = parseFilename(res.headers.get("content-disposition")) || `${adName}.zip`;
       triggerDownload(blob, filename);
-      setStatus("idle");
+      setStatus("success");
+      if (found && added) {
+        const f = Number(found);
+        const a = Number(added);
+        setInfo(a < f ? `${a} of ${f} assets` : `${a} asset${a === 1 ? "" : "s"}`);
+      }
+      setTimeout(() => setStatus((s) => (s === "success" ? "idle" : s)), 4000);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Download failed");
@@ -85,6 +95,9 @@ export function DownloadCreativeButton({ adId, adName, token }: Props) {
         >
           {error.length > 40 ? `${error.slice(0, 40)}…` : error}
         </span>
+      )}
+      {status === "success" && info && (
+        <span className="text-[10px] text-winner leading-tight">{info}</span>
       )}
     </div>
   );

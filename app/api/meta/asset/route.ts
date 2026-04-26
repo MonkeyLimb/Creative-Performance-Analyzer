@@ -80,6 +80,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
+        "X-Asset-Found": String(refs.length),
+        "X-Asset-Resolved": String(resolved.length),
+        "X-Asset-Added": String(appended),
       },
     });
   } catch (e) {
