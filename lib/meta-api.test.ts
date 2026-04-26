@@ -82,6 +82,41 @@ describe("extractAssetRefs", () => {
     ]);
   });
 
+  it("extracts image-hash refs from dynamic creatives without urls", () => {
+    const refs = extractAssetRefs({
+      asset_feed_spec: {
+        images: [{ hash: "abc123" }, { hash: "def456" }],
+        videos: [{ video_id: "dv-1" }],
+      },
+    });
+    expect(refs).toEqual([
+      { kind: "image-hash", hash: "abc123", label: "01-dynamic-image" },
+      { kind: "image-hash", hash: "def456", label: "02-dynamic-image" },
+      { kind: "video", videoId: "dv-1", label: "01-dynamic-video" },
+    ]);
+  });
+
+  it("extracts top-level image_hash when image_url is missing", () => {
+    const refs = extractAssetRefs({ image_hash: "topHash" });
+    expect(refs).toEqual([
+      { kind: "image-hash", hash: "topHash", label: "image" },
+    ]);
+  });
+
+  it("prefers picture over image_hash on link_data", () => {
+    const refs = extractAssetRefs({
+      object_story_spec: {
+        link_data: {
+          picture: "https://cdn.example.com/p.jpg",
+          image_hash: "ignored",
+        },
+      },
+    });
+    expect(refs).toEqual([
+      { kind: "image", url: "https://cdn.example.com/p.jpg", label: "image" },
+    ]);
+  });
+
   it("dedupes repeated image urls and video ids", () => {
     const refs = extractAssetRefs({
       image_url: "https://cdn.example.com/a.jpg",
