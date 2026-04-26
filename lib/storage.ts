@@ -1,8 +1,10 @@
 import { AdAccount, DEFAULT_THRESHOLDS, Thresholds } from "./types";
+import { EMPTY_RPL_OVERRIDES, RplOverrides } from "./schools";
 
 const KEYS = {
   thresholds: "cpa.thresholds.v2",
   account: "cpa.account.v1",
+  rplOverrides: "cpa.rpl.v1",
 } as const;
 
 function isBrowser(): boolean {
@@ -40,4 +42,24 @@ export function loadAccount(): AdAccount | null {
 export function saveAccount(a: AdAccount): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(KEYS.account, JSON.stringify(a));
+}
+
+export function loadRplOverrides(): RplOverrides {
+  if (!isBrowser()) return EMPTY_RPL_OVERRIDES;
+  try {
+    const raw = window.localStorage.getItem(KEYS.rplOverrides);
+    if (!raw) return EMPTY_RPL_OVERRIDES;
+    const parsed = JSON.parse(raw) as Partial<RplOverrides>;
+    return {
+      schools: parsed.schools ?? {},
+      programs: parsed.programs ?? {},
+    };
+  } catch {
+    return EMPTY_RPL_OVERRIDES;
+  }
+}
+
+export function saveRplOverrides(o: RplOverrides): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.rplOverrides, JSON.stringify(o));
 }
