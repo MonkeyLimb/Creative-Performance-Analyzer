@@ -16,6 +16,7 @@ import {
   saveAccount,
   saveThresholds,
 } from "@/lib/storage";
+import { loadMetaToken, saveMetaToken } from "@/lib/meta-token";
 import { fmtCurrency, fmtNumber } from "@/lib/format";
 import { SAMPLE_CSV } from "@/lib/sample-csv";
 import { Sidebar } from "@/components/Sidebar";
@@ -41,6 +42,7 @@ const DELIVERY_FILTERS: DeliveryFilter[] = ["all", "active", "inactive"];
 export default function DashboardPage() {
   const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
   const [account, setAccount] = useState<AdAccount>({ actId: "" });
+  const [metaToken, setMetaToken] = useState<string>("");
   const [csvText, setCsvText] = useState<string>(SAMPLE_CSV);
   const [creatives, setCreatives] = useState<Creative[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export default function DashboardPage() {
     setThresholds(loadThresholds());
     const a = loadAccount();
     if (a) setAccount(a);
+    setMetaToken(loadMetaToken());
     setHydrated(true);
   }, []);
 
@@ -63,6 +66,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveAccount(account);
   }, [account, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveMetaToken(metaToken);
+  }, [metaToken, hydrated]);
 
   const handleAnalyze = () => {
     if (!csvText.trim()) {
@@ -134,6 +141,8 @@ export default function DashboardPage() {
         onThresholdsChange={setThresholds}
         account={account}
         onAccountChange={setAccount}
+        metaToken={metaToken}
+        onMetaTokenChange={setMetaToken}
         topN={topN}
         onTopNChange={setTopN}
         csvText={csvText}
@@ -262,6 +271,7 @@ export default function DashboardPage() {
                 deliveryFilter={deliveryFilter}
                 account={account}
                 hasAdIds={hasAdIds}
+                metaToken={metaToken}
               />
             </section>
           </div>
