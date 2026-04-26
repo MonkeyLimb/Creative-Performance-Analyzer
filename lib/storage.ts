@@ -1,10 +1,15 @@
 import { AdAccount, DEFAULT_THRESHOLDS, Thresholds } from "./types";
-import { EMPTY_RPL_OVERRIDES, RplOverrides } from "./schools";
+import {
+  CreativeMatchOverrides,
+  EMPTY_RPL_OVERRIDES,
+  RplOverrides,
+} from "./schools";
 
 const KEYS = {
   thresholds: "cpa.thresholds.v2",
   account: "cpa.account.v1",
   rplOverrides: "cpa.rpl.v1",
+  matchOverrides: "cpa.matches.v1",
 } as const;
 
 function isBrowser(): boolean {
@@ -62,4 +67,21 @@ export function loadRplOverrides(): RplOverrides {
 export function saveRplOverrides(o: RplOverrides): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(KEYS.rplOverrides, JSON.stringify(o));
+}
+
+export function loadMatchOverrides(): CreativeMatchOverrides {
+  if (!isBrowser()) return {};
+  try {
+    const raw = window.localStorage.getItem(KEYS.matchOverrides);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as CreativeMatchOverrides;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveMatchOverrides(o: CreativeMatchOverrides): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.matchOverrides, JSON.stringify(o));
 }

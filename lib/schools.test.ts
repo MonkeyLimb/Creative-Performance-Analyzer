@@ -4,11 +4,13 @@ import {
   SCHOOL_REGISTRY,
   computeRevenue,
   computeRoas,
+  deriveRoas,
   detectSchool,
   getRpl,
   programKey,
   schoolKey,
 } from "./schools";
+import { Creative } from "./types";
 
 function fakeCreative(adName: string, campaignName?: string) {
   return { adName, campaignName, adSetName: undefined };
@@ -54,6 +56,27 @@ describe("detectSchool", () => {
     const m = detectSchool(fakeCreative("AIU|Brand|Q2"));
     expect(m).toEqual({ school: "AIU", program: null });
   });
+
+  it("matches FSU Cyber via the cyber alias", () => {
+    expect(detectSchool(fakeCreative("FSU|Cyber|Static|3"))).toEqual({
+      school: "FSU",
+      program: "Cybersecurity",
+    });
+  });
+
+  it("matches FSU IT via the IT alias", () => {
+    expect(detectSchool(fakeCreative("FSU|IT|Static|3"))).toEqual({
+      school: "FSU",
+      program: "Information Technology",
+    });
+  });
+
+  it("matches FSU Game Dev via the gamedev alias (no space)", () => {
+    expect(detectSchool(fakeCreative("FSU|GameDev|Static|3"))).toEqual({
+      school: "FSU",
+      program: "Game Development",
+    });
+  });
 });
 
 describe("getRpl", () => {
@@ -90,6 +113,59 @@ describe("getRpl", () => {
 
   it("returns null for unknown match", () => {
     expect(getRpl(null, SCHOOL_REGISTRY, EMPTY_RPL_OVERRIDES)).toBeNull();
+  });
+});
+
+function fullCreative(adName: string, results = 10, spend = 100): Creative {
+  return {
+    adName,
+    spend,
+    results,
+    cpl: results > 0 ? spend / results : null,
+    impressions: 0,
+    reach: 0,
+    frequency: null,
+    ctr: null,
+    cpm: null,
+    delivery: "active",
+    quality: "unknown",
+    engagement: "unknown",
+    conversion: "unknown",
+    raw: {},
+  };
+}
+
+describe("deriveRoas with manual overrides", () => {
+  it("uses the manual school+program override when provided", () => {
+    const c = fullCreative("Generic|Promo|2024", 10, 100);
+    const out = deriveRoas(c, SCHOOL_REGISTRY, EMPTY_RPL_OVERRIDES, {
+      "Generic|Promo|2024": { school: "FSU", program: "Music Production" },
+    });
+    expect(out.match).toEqual({ school: "FSU", program: "Music Production" });
+    expect(out.matchSource).toBe("manual");
+    expect(out.rpl).toBe(75);
+    expect(out.revenue).toBe(750);
+    expect(out.roas).toBeCloseTo(7.5);
+  });
+
+  it("supports manual-cleared (explicit no match) overrides", () => {
+    const c = fullCreative("FSU|Music|spring", 10, 100);
+    const out = deriveRoas(c, SCHOOL_REGISTRY, EMPTY_RPL_OVERRIDES, {
+      "FSU|Music|spring": { school: null, program: null },
+    });
+    expect(out.match).toBeNull();
+    expect(out.matchSource).toBe("manual-cleared");
+    expect(out.revenue).toBeNull();
+  });
+
+  it("falls back to auto detection when no override exists", () => {
+    const c = fullCreative("FSU|Cyber|H&P|3", 10, 100);
+    const out = deriveRoas(c, SCHOOL_REGISTRY, EMPTY_RPL_OVERRIDES, {});
+    expect(out.matchSource).toBe("auto");
+    expect(out.match).toEqual({
+      school: "FSU",
+      program: "Cybersecurity",
+    });
   });
 });
 

@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { Creative } from "@/lib/types";
 import {
+  CreativeMatchOverrides,
   RplOverrides,
   SCHOOL_REGISTRY,
   deriveRoas,
@@ -22,6 +23,7 @@ import { TopN } from "./CplChart";
 type Props = {
   creatives: Creative[];
   rplOverrides: RplOverrides;
+  matchOverrides: CreativeMatchOverrides;
   topN?: TopN;
 };
 
@@ -32,9 +34,17 @@ function roasColor(roas: number): string {
   return "#E24B4A";
 }
 
-export function RoasChart({ creatives, rplOverrides, topN = 10 }: Props) {
+export function RoasChart({
+  creatives,
+  rplOverrides,
+  matchOverrides,
+  topN = 10,
+}: Props) {
   const enriched = creatives
-    .map((c) => ({ creative: c, ...deriveRoas(c, SCHOOL_REGISTRY, rplOverrides) }))
+    .map((c) => ({
+      creative: c,
+      ...deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides),
+    }))
     .filter((x) => x.roas != null && (x.roas as number) > 0)
     .sort((a, b) => (b.roas as number) - (a.roas as number));
 

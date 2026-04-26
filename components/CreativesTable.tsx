@@ -5,7 +5,14 @@ import { AdAccount, Creative, Thresholds, TierStatus } from "@/lib/types";
 import { classify } from "@/lib/tiers";
 import { buildAdsManagerUrl } from "@/lib/ads-manager-url";
 import { fmtCurrency, fmtNumber, fmtPct, fmtRoas } from "@/lib/format";
-import { CreativeRoas, RplOverrides, SCHOOL_REGISTRY, deriveRoas } from "@/lib/schools";
+import {
+  CreativeMatchOverrides,
+  CreativeRoas,
+  RplOverrides,
+  SCHOOL_REGISTRY,
+  creativeMatchKey,
+  deriveRoas,
+} from "@/lib/schools";
 import { StatusBadge } from "./StatusBadge";
 import { DeliveryBadge } from "./DeliveryBadge";
 import { QualityBadge } from "./QualityBadge";
@@ -33,6 +40,8 @@ type Props = {
   hasAdIds: boolean;
   metaToken: string;
   rplOverrides: RplOverrides;
+  matchOverrides: CreativeMatchOverrides;
+  onMatchOverridesChange: (o: CreativeMatchOverrides) => void;
 };
 
 const STATUS_RANK: Record<TierStatus, number> = {
@@ -56,22 +65,41 @@ export function CreativesTable({
   hasAdIds,
   metaToken,
   rplOverrides,
+  matchOverrides,
+  onMatchOverridesChange,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "spend",
     dir: "desc",
   });
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const decorated = useMemo(
     () =>
       creatives.map((c) => ({
         creative: c,
         status: classify(c, thresholds),
-        roas: deriveRoas(c, SCHOOL_REGISTRY, rplOverrides),
-        key: c.adId || c.adName,
+        roas: deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides),
+        key: creativeMatchKey(c),
       })),
-    [creatives, thresholds, rplOverrides],
+    [creatives, thresholds, rplOverrides, matchOverrides],
   );
+
+  const setMatch = (
+    key: string,
+    school: string | null,
+    program: string | null,
+  ) => {
+    const next = { ...matchOverrides, [key]: { school, program } };
+    onMatchOverridesChange(next);
+  };
+
+  const clearMatch = (key: string) => {
+    if (!(key in matchOverrides)) return;
+    const next = { ...matchOverrides };
+    delete next[key];
+    onMatchOverridesChange(next);
+  };
 
   const filtered = useMemo(() => {
     let d = decorated;
@@ -223,15 +251,17 @@ export function CreativesTable({
                       <span className="text-textDim text-xs shrink-0">↗</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {roas.match ? (
-                      <SchoolTag
-                        school={roas.match.school}
-                        program={roas.match.program}
-                      />
-                    ) : (
-                      <span className="text-[10px] text-textDim">No school match</span>
-                    )}
+                  <div className="mt-0.5">
+                    <SchoolMatchEditor
+                      match={roas.match}
+                      source={roas.matchSource}
+                      isEditing={editingKey === key}
+                      onToggle={() =>
+                        setEditingKey(editingKey === key ? null : key)
+                      }
+                      onSet={(school, program) => setMatch(key, school, program)}
+                      onClear={() => clearMatch(key)}
+                    />
                   </div>
                   {c.campaignName && (
                     <div
@@ -380,22 +410,110 @@ function roasTone(roas: number | null): string | undefined {
   return "#E24B4A";
 }
 
-function SchoolTag({
-  school,
-  program,
+function SchoolMatchEditor({
+  match,
+  source,
+  isEditing,
+  onToggle,
+  onSet,
+  onClear,
 }: {
-  school: string;
-  program: string | null;
+  match: { school: string; program: string | null } | null;
+  source: CreativeRoas["matchSource"];
+  isEditing: boolean;
+  onToggle: () => void;
+  onSet: (school: string | null, program: string | null) => void;
+  onClear: () => void;
 }) {
+  const isManual = source !== "auto";
+
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-surface2 border border-border text-textDim">
-      <span className="text-text font-medium">{school}</span>
-      {program && (
-        <>
-          <span className="text-textDim/60">·</span>
-          <span>{program}</span>
-        </>
+    <div className="inline-flex flex-col items-start gap-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+          isManual
+            ? "bg-accent/10 border-accent/40 text-text"
+            : "bg-surface2 border-border text-textDim hover:border-accent/50"
+        }`}
+        title={
+          isManual
+            ? "Manually set — click to edit"
+            : "Auto-detected — click to override"
+        }
+      >
+        {match ? (
+          <>
+            <span className="text-text font-medium">{match.school}</span>
+            {match.program && (
+              <>
+                <span className="text-textDim/60">·</span>
+                <span>{match.program}</span>
+              </>
+            )}
+          </>
+        ) : (
+          <span>{source === "manual-cleared" ? "No match (manual)" : "No school match"}</span>
+        )}
+        <span className="text-textDim text-[9px] ml-0.5">
+          {isEditing ? "▴" : "✎"}
+        </span>
+      </button>
+      {isEditing && (
+        <div className="flex flex-wrap items-center gap-1.5 bg-surface2 border border-border rounded-md p-1.5">
+          <select
+            value={match?.school ?? (source === "manual-cleared" ? "__none__" : "")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "") {
+                onClear();
+              } else if (v === "__none__") {
+                onSet(null, null);
+              } else {
+                onSet(v, null);
+              }
+            }}
+            className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-accent"
+          >
+            <option value="">Auto-detect</option>
+            <option value="__none__">No match</option>
+            {SCHOOL_REGISTRY.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {match?.school && (
+            <select
+              value={match.program ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                onSet(match.school, v === "" ? null : v);
+              }}
+              className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-accent max-w-[200px]"
+            >
+              <option value="">— program —</option>
+              {(SCHOOL_REGISTRY.find((s) => s.name === match.school)?.programs ?? []).map(
+                (p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ),
+              )}
+            </select>
+          )}
+          {isManual && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[10px] text-textDim hover:text-cut underline-offset-2 hover:underline"
+            >
+              ↺ auto
+            </button>
+          )}
+        </div>
       )}
-    </span>
+    </div>
   );
 }
