@@ -99,20 +99,6 @@ export function CreativesTable({
     );
   };
 
-  const openInAdsManager = (c: Creative) => {
-    if (!account.actId) return;
-    try {
-      const url = buildAdsManagerUrl({
-        account,
-        adNames: [c.adName],
-        adIds: c.adId ? [c.adId] : undefined,
-      });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      /* no-op */
-    }
-  };
-
   if (sorted.length === 0) {
     return (
       <div className="bg-surface border border-border rounded-lg p-10 text-center text-sm text-textDim">
@@ -179,23 +165,32 @@ export function CreativesTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map(({ creative: c, status, key }) => (
+            {sorted.map(({ creative: c, status, key }) => {
+              const adsUrl = isClickable ? safeBuildAdsUrl(c, account) : null;
+              return (
               <tr
                 key={key}
-                onClick={() => isClickable && openInAdsManager(c)}
-                className={`border-b border-border last:border-b-0 transition-colors ${
-                  isClickable
-                    ? "cursor-pointer hover:bg-surface2/60"
-                    : ""
-                }`}
+                className="border-b border-border last:border-b-0"
               >
                 <td className="px-3 py-2.5 max-w-sm">
                   <div
                     className="flex items-center gap-1.5 truncate"
                     title={c.adName}
                   >
-                    <span className="truncate">{c.adName}</span>
-                    {isClickable && (
+                    {adsUrl ? (
+                      <a
+                        href={adsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.adName}
+                      </a>
+                    ) : (
+                      <span className="truncate">{c.adName}</span>
+                    )}
+                    {adsUrl && (
                       <span className="text-textDim text-xs shrink-0">↗</span>
                     )}
                   </div>
@@ -240,23 +235,36 @@ export function CreativesTable({
                   />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
       {!hasAdIds && isClickable && (
         <div className="bg-surface2 border-t border-border px-4 py-2 text-xs text-textDim">
-          No Ad ID column detected — rows open filtered by ad name only.
+          No Ad ID column detected — name links filter by ad name only.
           Re-export with the Ad ID column for precise links.
         </div>
       )}
       {!isClickable && (
         <div className="bg-surface2 border-t border-border px-4 py-2 text-xs text-textDim">
-          Add an Ad account ID in the sidebar to make rows clickable.
+          Add an Ad account ID in the sidebar to make ad names linkable.
         </div>
       )}
     </div>
   );
+}
+
+function safeBuildAdsUrl(c: Creative, account: AdAccount): string | null {
+  try {
+    return buildAdsManagerUrl({
+      account,
+      adNames: [c.adName],
+      adIds: c.adId ? [c.adId] : undefined,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function SortableTH({

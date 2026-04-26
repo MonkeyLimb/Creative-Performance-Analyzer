@@ -23,7 +23,11 @@ export function buildAdsManagerUrl({
     params.set("global_scope_id", account.businessId);
   }
 
-  params.set("filter_set", `SEARCH_BY_AD_NAME-STRING-EQUAL-${encodeAdNameFilter(adNames)}`);
+  const RS = "\x1E";
+  params.set(
+    "filter_set",
+    `SEARCH_BY_ADGROUP_NAME-STRING${RS}CONTAINS_ALL${RS}${encodeAdNameFilter(adNames)}`,
+  );
 
   if (adIds && adIds.length > 0) {
     params.set("selected_ad_ids", adIds.join(","));

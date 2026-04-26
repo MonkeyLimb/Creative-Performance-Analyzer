@@ -40,7 +40,7 @@ describe("buildAdsManagerUrl", () => {
       adNames: ["Hero Spring"],
     });
     expect(url).toContain("act=act_123");
-    expect(url).toContain("filter_set=SEARCH_BY_AD_NAME-STRING-EQUAL-");
+    expect(url).toContain("filter_set=SEARCH_BY_ADGROUP_NAME-STRING%1ECONTAINS_ALL%1E");
     expect(url).not.toContain("business_id");
     expect(url).not.toContain("selected_ad_ids");
   });
@@ -91,11 +91,9 @@ describe("buildAdsManagerUrl", () => {
     });
     const filterSet = new URL(url).searchParams.get("filter_set");
     expect(filterSet).toBe(
-      'SEARCH_BY_AD_NAME-STRING-EQUAL-"[\\"Hero Spring\\"]"',
+      'SEARCH_BY_ADGROUP_NAME-STRING\x1ECONTAINS_ALL\x1E"[\\"Hero Spring\\"]"',
     );
-    expect(JSON.parse(JSON.parse(filterSet!.replace(
-      "SEARCH_BY_AD_NAME-STRING-EQUAL-",
-      "",
-    )))).toEqual(["Hero Spring"]);
+    const value = filterSet!.split("\x1E").pop()!;
+    expect(JSON.parse(JSON.parse(value))).toEqual(["Hero Spring"]);
   });
 });
