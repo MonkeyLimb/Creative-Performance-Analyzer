@@ -12,9 +12,11 @@ import { parseCsv } from "@/lib/csv";
 import { classify } from "@/lib/tiers";
 import {
   loadAccount,
+  loadMatchOverrides,
   loadRplOverrides,
   loadThresholds,
   saveAccount,
+  saveMatchOverrides,
   saveRplOverrides,
   saveThresholds,
 } from "@/lib/storage";
@@ -22,6 +24,7 @@ import { loadMetaToken, saveMetaToken } from "@/lib/meta-token";
 import { fmtCurrency, fmtNumber, fmtRoas } from "@/lib/format";
 import { SAMPLE_CSV } from "@/lib/sample-csv";
 import {
+  CreativeMatchOverrides,
   EMPTY_RPL_OVERRIDES,
   RplOverrides,
   SCHOOL_REGISTRY,
@@ -60,6 +63,8 @@ export default function DashboardPage() {
   const [topN, setTopN] = useState<TopN>(10);
   const [rplOverrides, setRplOverrides] =
     useState<RplOverrides>(EMPTY_RPL_OVERRIDES);
+  const [matchOverrides, setMatchOverrides] =
+    useState<CreativeMatchOverrides>({});
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -68,6 +73,7 @@ export default function DashboardPage() {
     if (a) setAccount(a);
     setMetaToken(loadMetaToken());
     setRplOverrides(loadRplOverrides());
+    setMatchOverrides(loadMatchOverrides());
     setHydrated(true);
   }, []);
 
@@ -86,6 +92,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveRplOverrides(rplOverrides);
   }, [rplOverrides, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveMatchOverrides(matchOverrides);
+  }, [matchOverrides, hydrated]);
 
   const handleAnalyze = () => {
     if (!csvText.trim()) {
@@ -123,7 +133,7 @@ export default function DashboardPage() {
     let totalRevenue = 0;
     let revenueAttributed = false;
     for (const c of creatives) {
-      const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides);
+      const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides, matchOverrides);
       if (r.revenue != null) {
         totalRevenue += r.revenue;
         revenueAttributed = true;
@@ -159,7 +169,7 @@ export default function DashboardPage() {
       activeCount,
       topPerformer,
     };
-  }, [creatives, decorated, rplOverrides]);
+  }, [creatives, decorated, rplOverrides, matchOverrides]);
 
   const hasAdIds = !!creatives?.some((c) => c.adId);
 
@@ -288,6 +298,7 @@ export default function DashboardPage() {
                   <RoasChart
                     creatives={creatives}
                     rplOverrides={rplOverrides}
+                    matchOverrides={matchOverrides}
                     topN={topN}
                   />
                 </ScrollPanel>
@@ -336,6 +347,8 @@ export default function DashboardPage() {
                 hasAdIds={hasAdIds}
                 metaToken={metaToken}
                 rplOverrides={rplOverrides}
+                matchOverrides={matchOverrides}
+                onMatchOverridesChange={setMatchOverrides}
               />
             </section>
           </div>

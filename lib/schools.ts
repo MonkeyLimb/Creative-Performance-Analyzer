@@ -146,17 +146,17 @@ export const SCHOOL_REGISTRY: School[] = [
       },
       {
         name: "Game Development",
-        aliases: ["game development", "game dev", "gamedev"],
+        aliases: ["game development", "game dev", "gamedev", "game-dev", "gd"],
         defaultRpl: 75,
       },
       {
         name: "Information Technology",
-        aliases: ["information technology", "it h&p", "it"],
+        aliases: ["information technology", "it h&p", "it h p", "it"],
         defaultRpl: 75,
       },
       {
         name: "Cybersecurity",
-        aliases: ["cybersecurity", "cyber security", "cyber"],
+        aliases: ["cybersecurity", "cyber security", "cybersec", "cyber"],
         defaultRpl: 75,
       },
     ],
@@ -320,19 +320,47 @@ export function computeRoas(
 
 export type CreativeRoas = {
   match: SchoolMatch | null;
+  matchSource: "auto" | "manual" | "manual-cleared";
   rpl: number | null;
   revenue: number | null;
   roas: number | null;
 };
 
+// Map from creative key (adId || adName) to a manual school/program override.
+// `school: null` means the user explicitly marked the creative as "no match".
+export type CreativeMatchOverride = {
+  school: string | null;
+  program: string | null;
+};
+
+export type CreativeMatchOverrides = Record<string, CreativeMatchOverride>;
+
+export function creativeMatchKey(c: Pick<Creative, "adId" | "adName">): string {
+  return c.adId || c.adName;
+}
+
 export function deriveRoas(
   c: Creative,
   schools: School[],
   overrides: RplOverrides,
+  matchOverrides: CreativeMatchOverrides = {},
 ): CreativeRoas {
-  const match = detectSchool(c, schools);
+  const key = creativeMatchKey(c);
+  const manual = matchOverrides[key];
+  let match: SchoolMatch | null;
+  let matchSource: CreativeRoas["matchSource"];
+  if (manual === undefined) {
+    match = detectSchool(c, schools);
+    matchSource = "auto";
+  } else if (manual.school === null) {
+    match = null;
+    matchSource = "manual-cleared";
+  } else {
+    match = { school: manual.school, program: manual.program };
+    matchSource = "manual";
+  }
   const rpl = getRpl(match, schools, overrides);
   const revenue = computeRevenue(c.results, rpl);
   const roas = computeRoas(revenue, c.spend);
-  return { match, rpl, revenue, roas };
+  return { match, matchSource, rpl, revenue, roas };
 }
