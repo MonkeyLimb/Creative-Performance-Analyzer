@@ -12,13 +12,17 @@ import { parseCsv } from "@/lib/csv";
 import { classify } from "@/lib/tiers";
 import {
   loadAccount,
+  loadChartHidden,
   loadChartOrder,
+  loadChartSizes,
   loadMatchOverrides,
   loadRplOverrides,
   loadSidebarCollapsed,
   loadThresholds,
   saveAccount,
+  saveChartHidden,
   saveChartOrder,
+  saveChartSizes,
   saveMatchOverrides,
   saveRplOverrides,
   saveSidebarCollapsed,
@@ -49,7 +53,11 @@ import {
   DeliveryFilter,
 } from "@/components/CreativesTable";
 import { InsightCallout } from "@/components/InsightCallout";
-import { DraggableCharts, ChartPanel } from "@/components/DraggableCharts";
+import {
+  DraggableCharts,
+  ChartPanel,
+  ChartSize,
+} from "@/components/DraggableCharts";
 import { ExportMenu } from "@/components/ExportMenu";
 
 const TIER_FILTERS: Array<TierStatus | "all"> = [
@@ -84,6 +92,8 @@ export default function DashboardPage() {
     useState<CreativeMatchOverrides>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [chartOrder, setChartOrder] = useState<string[]>(DEFAULT_CHART_ORDER);
+  const [chartHidden, setChartHidden] = useState<string[]>([]);
+  const [chartSizes, setChartSizes] = useState<Record<string, ChartSize>>({});
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -104,6 +114,8 @@ export default function DashboardPage() {
     }
     const stored = loadChartOrder();
     if (stored.length) setChartOrder(stored);
+    setChartHidden(loadChartHidden());
+    setChartSizes(loadChartSizes());
     setHydrated(true);
   }, []);
 
@@ -134,6 +146,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveChartOrder(chartOrder);
   }, [chartOrder, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveChartHidden(chartHidden);
+  }, [chartHidden, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveChartSizes(chartSizes);
+  }, [chartSizes, hydrated]);
 
   const handleAnalyze = () => {
     if (!csvText.trim()) {
@@ -259,10 +279,12 @@ export default function DashboardPage() {
 
   const chartPanels: ChartPanel[] = useMemo(() => {
     if (!creatives) return [];
+    const topNControl = { value: topN, onChange: setTopN };
     return [
       {
         id: "cpl",
         title: `CPL by creative (top ${topN === "all" ? "all" : topN})`,
+        topN: topNControl,
         render: () => (
           <CplChart
             creatives={creatives}
@@ -276,6 +298,7 @@ export default function DashboardPage() {
       {
         id: "roas-bar",
         title: `ROAS by creative (top ${topN === "all" ? "all" : topN})`,
+        topN: topNControl,
         render: () => (
           <RoasChart
             creatives={creatives}
@@ -428,17 +451,23 @@ export default function DashboardPage() {
             />
 
             <section aria-label="Performance charts">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                 <div className="text-xs uppercase tracking-wider text-textDim">
-                  Charts · drag to reorder
+                  Charts · drag, resize, hide
                 </div>
-                {chartOrder.join(",") !== DEFAULT_CHART_ORDER.join(",") && (
+                {(chartOrder.join(",") !== DEFAULT_CHART_ORDER.join(",") ||
+                  chartHidden.length > 0 ||
+                  Object.keys(chartSizes).length > 0) && (
                   <button
                     type="button"
-                    onClick={() => setChartOrder(DEFAULT_CHART_ORDER)}
+                    onClick={() => {
+                      setChartOrder(DEFAULT_CHART_ORDER);
+                      setChartHidden([]);
+                      setChartSizes({});
+                    }}
                     className="text-[10px] uppercase tracking-[0.05em] text-textDim hover:text-text transition-colors"
                   >
-                    Reset order
+                    Reset layout
                   </button>
                 )}
               </div>
@@ -446,6 +475,10 @@ export default function DashboardPage() {
                 panels={chartPanels}
                 order={chartOrder}
                 onOrderChange={setChartOrder}
+                hidden={chartHidden}
+                onHiddenChange={setChartHidden}
+                sizes={chartSizes}
+                onSizesChange={setChartSizes}
               />
             </section>
 

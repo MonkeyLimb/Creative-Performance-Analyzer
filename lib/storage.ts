@@ -12,6 +12,8 @@ const KEYS = {
   matchOverrides: "cpa.matches.v1",
   sidebarCollapsed: "cpa.sidebar.collapsed.v1",
   chartOrder: "cpa.chart.order.v1",
+  chartHidden: "cpa.chart.hidden.v1",
+  chartSizes: "cpa.chart.sizes.v1",
 } as const;
 
 function isBrowser(): boolean {
@@ -120,4 +122,50 @@ export function loadChartOrder(): string[] {
 export function saveChartOrder(order: string[]): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(KEYS.chartOrder, JSON.stringify(order));
+}
+
+export function loadChartHidden(): string[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(KEYS.chartHidden);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+      return parsed;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveChartHidden(hidden: string[]): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.chartHidden, JSON.stringify(hidden));
+}
+
+export function loadChartSizes(): Record<string, "sm" | "md" | "lg"> {
+  if (!isBrowser()) return {};
+  try {
+    const raw = window.localStorage.getItem(KEYS.chartSizes);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      const out: Record<string, "sm" | "md" | "lg"> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (v === "sm" || v === "md" || v === "lg") out[k] = v;
+      }
+      return out;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveChartSizes(
+  sizes: Record<string, "sm" | "md" | "lg">,
+): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.chartSizes, JSON.stringify(sizes));
 }

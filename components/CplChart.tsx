@@ -75,7 +75,7 @@ export function CplChart({
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 8, right: 24, left: 0, bottom: 8 }}
+          margin={{ top: 12, right: 32, left: 0, bottom: 8 }}
           barCategoryGap={6}
         >
           <CartesianGrid

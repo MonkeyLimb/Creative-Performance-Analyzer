@@ -75,7 +75,7 @@ export function SpendVsLeadsScatter({
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
-        <RScatter margin={{ top: 8, right: 24, left: 0, bottom: 24 }}>
+        <RScatter margin={{ top: 12, right: 32, left: 16, bottom: 32 }}>
           <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" />
           <XAxis
             type="number"
@@ -86,7 +86,7 @@ export function SpendVsLeadsScatter({
             label={{
               value: "Spend ($)",
               position: "insideBottom",
-              offset: -10,
+              offset: -14,
               fill: "var(--color-textDim)",
               fontSize: 11,
             }}
@@ -96,11 +96,12 @@ export function SpendVsLeadsScatter({
             dataKey="y"
             name="Leads"
             tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
+            width={48}
             label={{
               value: "Leads",
               angle: -90,
               position: "insideLeft",
-              offset: 16,
+              offset: 8,
               fill: "var(--color-textDim)",
               fontSize: 11,
             }}
