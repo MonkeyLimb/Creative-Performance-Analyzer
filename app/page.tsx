@@ -12,19 +12,28 @@ import { parseCsv } from "@/lib/csv";
 import { classify } from "@/lib/tiers";
 import {
   loadAccount,
+  loadRplOverrides,
   loadThresholds,
   saveAccount,
+  saveRplOverrides,
   saveThresholds,
 } from "@/lib/storage";
 import { loadMetaToken, saveMetaToken } from "@/lib/meta-token";
-import { fmtCurrency, fmtNumber } from "@/lib/format";
+import { fmtCurrency, fmtNumber, fmtRoas } from "@/lib/format";
 import { SAMPLE_CSV } from "@/lib/sample-csv";
+import {
+  EMPTY_RPL_OVERRIDES,
+  RplOverrides,
+  SCHOOL_REGISTRY,
+  deriveRoas,
+} from "@/lib/schools";
 import { Sidebar } from "@/components/Sidebar";
 import { EmptyState } from "@/components/EmptyState";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CplChart, TopN } from "@/components/CplChart";
 import { SpendVsLeadsScatter } from "@/components/ScatterChart";
+import { RoasChart } from "@/components/RoasChart";
 import {
   CreativesTable,
   DeliveryFilter,
@@ -49,6 +58,8 @@ export default function DashboardPage() {
   const [tierFilter, setTierFilter] = useState<TierStatus | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<DeliveryFilter>("all");
   const [topN, setTopN] = useState<TopN>(10);
+  const [rplOverrides, setRplOverrides] =
+    useState<RplOverrides>(EMPTY_RPL_OVERRIDES);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -56,6 +67,7 @@ export default function DashboardPage() {
     const a = loadAccount();
     if (a) setAccount(a);
     setMetaToken(loadMetaToken());
+    setRplOverrides(loadRplOverrides());
     setHydrated(true);
   }, []);
 
@@ -70,6 +82,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (hydrated) saveMetaToken(metaToken);
   }, [metaToken, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) saveRplOverrides(rplOverrides);
+  }, [rplOverrides, hydrated]);
 
   const handleAnalyze = () => {
     if (!csvText.trim()) {
@@ -104,6 +120,17 @@ export default function DashboardPage() {
     const totalSpend = creatives.reduce((s, c) => s + c.spend, 0);
     const totalResults = creatives.reduce((s, c) => s + c.results, 0);
     const blendedCpl = totalResults > 0 ? totalSpend / totalResults : null;
+    let totalRevenue = 0;
+    let revenueAttributed = false;
+    for (const c of creatives) {
+      const r = deriveRoas(c, SCHOOL_REGISTRY, rplOverrides);
+      if (r.revenue != null) {
+        totalRevenue += r.revenue;
+        revenueAttributed = true;
+      }
+    }
+    const blendedRoas =
+      revenueAttributed && totalSpend > 0 ? totalRevenue / totalSpend : null;
     const winners = decorated
       .filter((d) => d.status === "winner")
       .map((d) => d.creative);
@@ -122,7 +149,9 @@ export default function DashboardPage() {
     return {
       totalSpend,
       totalResults,
+      totalRevenue: revenueAttributed ? totalRevenue : null,
       blendedCpl,
+      blendedRoas,
       winners,
       cuts,
       cutSpend,
@@ -130,7 +159,7 @@ export default function DashboardPage() {
       activeCount,
       topPerformer,
     };
-  }, [creatives, decorated]);
+  }, [creatives, decorated, rplOverrides]);
 
   const hasAdIds = !!creatives?.some((c) => c.adId);
 
@@ -153,6 +182,8 @@ export default function DashboardPage() {
         hasData={!!creatives}
         hasAdIds={hasAdIds}
         creativesCount={creatives?.length ?? 0}
+        rplOverrides={rplOverrides}
+        onRplOverridesChange={setRplOverrides}
       />
 
       <main className="flex-1 min-w-0">
@@ -178,7 +209,7 @@ export default function DashboardPage() {
               </p>
             </header>
 
-            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
               <MetricCard
                 label="Total spend"
                 value={fmtCurrency(metrics.totalSpend)}
@@ -190,6 +221,24 @@ export default function DashboardPage() {
               <MetricCard
                 label="Blended CPL"
                 value={fmtCurrency(metrics.blendedCpl)}
+              />
+              <MetricCard
+                label="Blended ROAS"
+                value={fmtRoas(metrics.blendedRoas)}
+                hint={
+                  metrics.totalRevenue != null
+                    ? `${fmtCurrency(metrics.totalRevenue)} rev`
+                    : "Add school keywords to ad names"
+                }
+                accent={
+                  metrics.blendedRoas != null
+                    ? metrics.blendedRoas >= 2
+                      ? "#1D9E75"
+                      : metrics.blendedRoas >= 1
+                        ? "#EF9F27"
+                        : "#E24B4A"
+                    : undefined
+                }
               />
               <MetricCard
                 label="Winners"
@@ -219,22 +268,36 @@ export default function DashboardPage() {
               hasAnyLeads={metrics.totalResults > 0}
             />
 
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <Panel
-                title={`CPL by creative (top ${topN === "all" ? "all" : topN})`}
-              >
-                <CplChart
-                  creatives={creatives}
-                  thresholds={thresholds}
-                  topN={topN}
-                />
-              </Panel>
-              <Panel title="Spend vs Leads">
-                <SpendVsLeadsScatter
-                  creatives={creatives}
-                  thresholds={thresholds}
-                />
-              </Panel>
+            <section
+              className="overflow-x-auto -mx-6 px-6 pb-2"
+              aria-label="Performance charts"
+            >
+              <div className="flex gap-3 min-w-max">
+                <ScrollPanel
+                  title={`CPL by creative (top ${topN === "all" ? "all" : topN})`}
+                >
+                  <CplChart
+                    creatives={creatives}
+                    thresholds={thresholds}
+                    topN={topN}
+                  />
+                </ScrollPanel>
+                <ScrollPanel
+                  title={`ROAS by creative (top ${topN === "all" ? "all" : topN})`}
+                >
+                  <RoasChart
+                    creatives={creatives}
+                    rplOverrides={rplOverrides}
+                    topN={topN}
+                  />
+                </ScrollPanel>
+                <ScrollPanel title="Spend vs Leads">
+                  <SpendVsLeadsScatter
+                    creatives={creatives}
+                    thresholds={thresholds}
+                  />
+                </ScrollPanel>
+              </div>
             </section>
 
             <section className="flex flex-col gap-3">
@@ -272,6 +335,7 @@ export default function DashboardPage() {
                 account={account}
                 hasAdIds={hasAdIds}
                 metaToken={metaToken}
+                rplOverrides={rplOverrides}
               />
             </section>
           </div>
@@ -290,6 +354,23 @@ function Panel({
 }) {
   return (
     <div className="bg-surface border border-border rounded-lg p-[18px]">
+      <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ScrollPanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-surface border border-border rounded-lg p-[18px] w-[560px] shrink-0">
       <div className="text-[11px] uppercase tracking-[0.05em] text-textDim mb-3">
         {title}
       </div>

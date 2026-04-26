@@ -1,7 +1,13 @@
 "use client";
 
-import { ChangeEvent, useRef } from "react";
+import { ChangeEvent, useRef, useState } from "react";
 import { AdAccount, Thresholds } from "@/lib/types";
+import {
+  RplOverrides,
+  SCHOOL_REGISTRY,
+  programKey,
+  schoolKey,
+} from "@/lib/schools";
 import { TopN } from "./CplChart";
 
 type Props = {
@@ -21,6 +27,8 @@ type Props = {
   hasData: boolean;
   hasAdIds: boolean;
   creativesCount: number;
+  rplOverrides: RplOverrides;
+  onRplOverridesChange: (o: RplOverrides) => void;
 };
 
 export function Sidebar({
@@ -40,6 +48,8 @@ export function Sidebar({
   hasData,
   hasAdIds,
   creativesCount,
+  rplOverrides,
+  onRplOverridesChange,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const hasAccount = !!account.actId.trim();
@@ -191,6 +201,11 @@ export function Sidebar({
         </Field>
       </Section>
 
+      <RplSection
+        rplOverrides={rplOverrides}
+        onRplOverridesChange={onRplOverridesChange}
+      />
+
       <button
         onClick={onAnalyze}
         disabled={!csvText.trim()}
@@ -312,6 +327,172 @@ function NumberInput({
           prefix ? "pl-6 pr-2.5" : "px-2.5"
         }`}
       />
+    </div>
+  );
+}
+
+function RplSection({
+  rplOverrides,
+  onRplOverridesChange,
+}: {
+  rplOverrides: RplOverrides;
+  onRplOverridesChange: (o: RplOverrides) => void;
+}) {
+  const [openSchool, setOpenSchool] = useState<string | null>(null);
+
+  const setProgramRpl = (school: string, program: string, value: number | null) => {
+    const key = programKey(school, program);
+    const next = { ...rplOverrides.programs };
+    if (value == null) delete next[key];
+    else next[key] = value;
+    onRplOverridesChange({ ...rplOverrides, programs: next });
+  };
+
+  const setSchoolRpl = (school: string, value: number | null) => {
+    const key = schoolKey(school);
+    const next = { ...rplOverrides.schools };
+    if (value == null) delete next[key];
+    else next[key] = value;
+    onRplOverridesChange({ ...rplOverrides, schools: next });
+  };
+
+  const reset = () =>
+    onRplOverridesChange({ schools: {}, programs: {} });
+
+  const overrideCount =
+    Object.keys(rplOverrides.programs).length +
+    Object.keys(rplOverrides.schools).length;
+
+  return (
+    <Section
+      title="Revenue per lead"
+      action={
+        overrideCount > 0 ? (
+          <button
+            type="button"
+            onClick={reset}
+            className="text-[10px] uppercase tracking-[0.05em] text-textDim hover:text-cut transition-colors"
+          >
+            Reset {overrideCount}
+          </button>
+        ) : null
+      }
+    >
+      <div className="text-[10px] text-textDim leading-[1.4]">
+        Per-program RPL drives Revenue and ROAS. Edit defaults below; values are
+        stored per browser.
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {SCHOOL_REGISTRY.map((school) => {
+          const sKey = schoolKey(school.name);
+          const isOpen = openSchool === school.name;
+          const schoolValue =
+            rplOverrides.schools[sKey] ?? school.defaultRpl;
+          return (
+            <div
+              key={school.name}
+              className="border border-border rounded-md overflow-hidden bg-surface2"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenSchool(isOpen ? null : school.name)
+                }
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[12px] hover:bg-surface transition-colors"
+              >
+                <span className="font-medium">{school.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="font-mono tabular-nums text-textDim">
+                    ${schoolValue}
+                  </span>
+                  <span className="text-textDim text-[10px]">
+                    {isOpen ? "▾" : "▸"}
+                  </span>
+                </span>
+              </button>
+              {isOpen && (
+                <div className="border-t border-border px-2.5 py-2 flex flex-col gap-1.5 bg-surface">
+                  <RplRow
+                    label={`${school.name} (school default)`}
+                    value={rplOverrides.schools[sKey] ?? school.defaultRpl}
+                    isOverridden={rplOverrides.schools[sKey] != null}
+                    onChange={(v) => setSchoolRpl(school.name, v)}
+                  />
+                  {school.programs.map((p) => {
+                    const pKey = programKey(school.name, p.name);
+                    const value =
+                      rplOverrides.programs[pKey] ?? p.defaultRpl;
+                    return (
+                      <RplRow
+                        key={p.name}
+                        label={p.name}
+                        value={value}
+                        isOverridden={rplOverrides.programs[pKey] != null}
+                        onChange={(v) =>
+                          setProgramRpl(school.name, p.name, v)
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function RplRow({
+  label,
+  value,
+  isOverridden,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  isOverridden: boolean;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`flex-1 text-[11px] truncate ${
+          isOverridden ? "text-text" : "text-textDim"
+        }`}
+        title={label}
+      >
+        {label}
+      </span>
+      <div className="relative w-20">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-textDim text-[11px] font-mono pointer-events-none">
+          $
+        </span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          value={Number.isFinite(value) ? value : ""}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onChange(n);
+          }}
+          className={`w-full bg-surface2 border rounded-md py-1 pl-5 pr-1.5 text-[11px] font-mono tabular-nums focus:outline-none focus:border-accent ${
+            isOverridden ? "border-accent/60" : "border-border"
+          }`}
+        />
+      </div>
+      {isOverridden && (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="text-[10px] text-textDim hover:text-cut"
+          title="Reset to default"
+        >
+          ×
+        </button>
+      )}
     </div>
   );
 }

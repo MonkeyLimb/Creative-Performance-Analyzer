@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { AdAccount, Creative, Thresholds, TierStatus } from "@/lib/types";
 import { classify } from "@/lib/tiers";
 import { buildAdsManagerUrl } from "@/lib/ads-manager-url";
-import { fmtCurrency, fmtNumber, fmtPct } from "@/lib/format";
+import { fmtCurrency, fmtNumber, fmtPct, fmtRoas } from "@/lib/format";
+import { CreativeRoas, RplOverrides, SCHOOL_REGISTRY, deriveRoas } from "@/lib/schools";
 import { StatusBadge } from "./StatusBadge";
 import { DeliveryBadge } from "./DeliveryBadge";
 import { QualityBadge } from "./QualityBadge";
@@ -16,7 +17,10 @@ type SortKey =
   | "spend"
   | "results"
   | "cpl"
-  | "ctr";
+  | "ctr"
+  | "rpl"
+  | "revenue"
+  | "roas";
 
 export type DeliveryFilter = "all" | "active" | "inactive";
 
@@ -28,6 +32,7 @@ type Props = {
   account: AdAccount;
   hasAdIds: boolean;
   metaToken: string;
+  rplOverrides: RplOverrides;
 };
 
 const STATUS_RANK: Record<TierStatus, number> = {
@@ -50,6 +55,7 @@ export function CreativesTable({
   account,
   hasAdIds,
   metaToken,
+  rplOverrides,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "spend",
@@ -61,9 +67,10 @@ export function CreativesTable({
       creatives.map((c) => ({
         creative: c,
         status: classify(c, thresholds),
+        roas: deriveRoas(c, SCHOOL_REGISTRY, rplOverrides),
         key: c.adId || c.adName,
       })),
-    [creatives, thresholds],
+    [creatives, thresholds, rplOverrides],
   );
 
   const filtered = useMemo(() => {
@@ -80,8 +87,8 @@ export function CreativesTable({
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      const av = value(a.creative, a.status, sort.key);
-      const bv = value(b.creative, b.status, sort.key);
+      const av = value(a.creative, a.status, a.roas, sort.key);
+      const bv = value(b.creative, b.status, b.roas, sort.key);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -152,6 +159,27 @@ export function CreativesTable({
                 align="right"
               />
               <SortableTH
+                label="RPL"
+                sortKey="rpl"
+                sort={sort}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortableTH
+                label="Revenue"
+                sortKey="revenue"
+                sort={sort}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortableTH
+                label="ROAS"
+                sortKey="roas"
+                sort={sort}
+                onClick={toggleSort}
+                align="right"
+              />
+              <SortableTH
                 label="CTR"
                 sortKey="ctr"
                 sort={sort}
@@ -165,8 +193,9 @@ export function CreativesTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map(({ creative: c, status, key }) => {
+            {sorted.map(({ creative: c, status, roas, key }) => {
               const adsUrl = isClickable ? safeBuildAdsUrl(c, account) : null;
+              const roasColor = roasTone(roas.roas);
               return (
               <tr
                 key={key}
@@ -194,9 +223,19 @@ export function CreativesTable({
                       <span className="text-textDim text-xs shrink-0">↗</span>
                     )}
                   </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {roas.match ? (
+                      <SchoolTag
+                        school={roas.match.school}
+                        program={roas.match.program}
+                      />
+                    ) : (
+                      <span className="text-[10px] text-textDim">No school match</span>
+                    )}
+                  </div>
                   {c.campaignName && (
                     <div
-                      className="truncate text-xs text-textDim"
+                      className="truncate text-xs text-textDim mt-0.5"
                       title={c.campaignName}
                     >
                       {c.campaignName}
@@ -220,6 +259,18 @@ export function CreativesTable({
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                   {fmtCurrency(c.spend)}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums text-textDim">
+                  {roas.rpl != null ? fmtCurrency(roas.rpl) : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {fmtCurrency(roas.revenue)}
+                </td>
+                <td
+                  className="px-3 py-2.5 text-right font-mono tabular-nums"
+                  style={roasColor ? { color: roasColor } : undefined}
+                >
+                  {fmtRoas(roas.roas)}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums text-textDim">
                   {fmtPct(c.ctr)}
@@ -297,6 +348,7 @@ function SortableTH({
 function value(
   c: Creative,
   status: TierStatus,
+  roas: CreativeRoas,
   key: SortKey,
 ): string | number | null {
   switch (key) {
@@ -312,5 +364,38 @@ function value(
       return c.cpl;
     case "ctr":
       return c.ctr;
+    case "rpl":
+      return roas.rpl;
+    case "revenue":
+      return roas.revenue;
+    case "roas":
+      return roas.roas;
   }
+}
+
+function roasTone(roas: number | null): string | undefined {
+  if (roas == null) return undefined;
+  if (roas >= 2) return "#1D9E75";
+  if (roas >= 1) return "#EF9F27";
+  return "#E24B4A";
+}
+
+function SchoolTag({
+  school,
+  program,
+}: {
+  school: string;
+  program: string | null;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-surface2 border border-border text-textDim">
+      <span className="text-text font-medium">{school}</span>
+      {program && (
+        <>
+          <span className="text-textDim/60">·</span>
+          <span>{program}</span>
+        </>
+      )}
+    </span>
+  );
 }
