@@ -79,20 +79,20 @@ export function CplChart({
           barCategoryGap={6}
         >
           <CartesianGrid
-            stroke="#2a2a2e"
+            stroke="var(--color-grid)"
             strokeDasharray="3 3"
             horizontal={false}
           />
           <XAxis
             type="number"
             domain={[0, "dataMax"]}
-            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
             tickFormatter={(v) => `$${v}`}
           />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fill: "#8a8a92", fontSize: 10 }}
+            tick={{ fill: "var(--color-textDim)", fontSize: 10 }}
             width={200}
             interval={0}
           />
@@ -106,8 +106,8 @@ export function CplChart({
                 status: string;
               };
               return (
-                <div className="bg-surface2 border border-border rounded px-2.5 py-1.5 text-xs max-w-xs">
-                  <div className="text-text break-all">{p.fullName}</div>
+                <div className="chart-tooltip rounded px-2.5 py-1.5 text-xs max-w-xs">
+                  <div className="break-all">{p.fullName}</div>
                   <div className="font-mono tabular-nums text-textDim mt-0.5">
                     CPL ${p.cpl.toFixed(2)}
                   </div>

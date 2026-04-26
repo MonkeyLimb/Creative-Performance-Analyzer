@@ -8,6 +8,7 @@ import {
   programKey,
   schoolKey,
 } from "@/lib/schools";
+import { Theme } from "@/lib/theme";
 import { TopN } from "./CplChart";
 
 type Props = {
@@ -29,6 +30,10 @@ type Props = {
   creativesCount: number;
   rplOverrides: RplOverrides;
   onRplOverridesChange: (o: RplOverrides) => void;
+  collapsed: boolean;
+  onCollapsedChange: (v: boolean) => void;
+  theme: Theme;
+  onThemeToggle: () => void;
 };
 
 export function Sidebar({
@@ -50,6 +55,10 @@ export function Sidebar({
   creativesCount,
   rplOverrides,
   onRplOverridesChange,
+  collapsed,
+  onCollapsedChange,
+  theme,
+  onThemeToggle,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const hasAccount = !!account.actId.trim();
@@ -66,14 +75,61 @@ export function Sidebar({
     e.target.value = "";
   };
 
+  if (collapsed) {
+    return (
+      <aside className="w-[44px] sm:w-[52px] shrink-0 border-r border-border bg-surface flex flex-col items-center py-3 sm:py-4 gap-2 sm:gap-3 h-screen sticky top-0 z-20">
+        <IconButton
+          label="Expand sidebar"
+          onClick={() => onCollapsedChange(false)}
+        >
+          <ChevronRightIcon />
+        </IconButton>
+        <IconButton
+          label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={onThemeToggle}
+        >
+          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+        </IconButton>
+        <div className="mt-auto text-[9px] text-textDim font-mono">CPA</div>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-[280px] shrink-0 border-r border-border bg-surface px-5 py-5 flex flex-col h-screen sticky top-0 overflow-y-auto">
-      <div className="mb-4">
-        <div className="text-sm font-semibold tracking-tight">
-          Creative Performance
+    <>
+      <button
+        type="button"
+        aria-label="Close sidebar"
+        onClick={() => onCollapsedChange(true)}
+        className="md:hidden fixed inset-0 bg-black/50 z-30 cursor-default"
+      />
+      <aside className="w-[280px] max-w-[85vw] shrink-0 border-r border-border bg-surface px-5 py-5 flex flex-col h-screen fixed md:sticky top-0 left-0 z-40 md:z-20 overflow-y-auto">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold tracking-tight">
+            Creative Performance
+          </div>
+          <div className="text-[11px] text-textDim mt-0.5">
+            Meta Ads analyzer
+          </div>
         </div>
-        <div className="text-[11px] text-textDim mt-0.5">
-          Meta Ads analyzer
+        <div className="flex items-center gap-1 shrink-0">
+          <IconButton
+            label={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
+            onClick={onThemeToggle}
+            small
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </IconButton>
+          <IconButton
+            label="Collapse sidebar"
+            onClick={() => onCollapsedChange(true)}
+            small
+          >
+            <ChevronLeftIcon />
+          </IconButton>
         </div>
       </div>
 
@@ -134,7 +190,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="text-[10px] uppercase tracking-[0.05em] text-accent hover:text-accent/80 font-semibold"
+            className="text-[10px] uppercase tracking-[0.05em] text-accent hover:opacity-80 font-semibold"
           >
             Upload file
           </button>
@@ -152,7 +208,7 @@ export function Sidebar({
           onChange={(e) => onCsvTextChange(e.target.value)}
           placeholder="Paste Meta Ads Manager CSV here…"
           spellCheck={false}
-          className="w-full h-[120px] bg-surface2 border border-border rounded-md px-2.5 py-2 text-[11px] font-mono leading-[1.4] resize-y focus:outline-none focus:border-accent"
+          className="w-full h-[120px] bg-surface2 border border-border rounded-md px-2.5 py-2 text-[11px] font-mono leading-[1.4] resize-y focus:outline-none focus:border-accent text-text"
         />
         <Hint>
           Include <code className="font-mono">Ad ID</code> column (Customize
@@ -173,7 +229,7 @@ export function Sidebar({
               const v = e.target.value;
               onTopNChange(v === "all" ? "all" : (Number(v) as TopN));
             }}
-            className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent cursor-pointer"
+            className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent cursor-pointer text-text"
           >
             <option value="5">5</option>
             <option value="10">10</option>
@@ -191,7 +247,7 @@ export function Sidebar({
       <button
         onClick={onAnalyze}
         disabled={!csvText.trim()}
-        className="mt-4 w-full bg-accent hover:bg-accent/85 disabled:bg-surface2 disabled:text-textDim disabled:cursor-not-allowed text-white rounded-md py-[11px] text-[13px] font-semibold transition-colors"
+        className="mt-4 w-full bg-accent hover:opacity-90 disabled:bg-surface2 disabled:text-textDim disabled:cursor-not-allowed text-accentFg rounded-md py-[11px] text-[13px] font-semibold transition-opacity"
       >
         Analyze
       </button>
@@ -227,7 +283,109 @@ export function Sidebar({
           </div>
         </div>
       )}
-    </aside>
+      </aside>
+    </>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  label,
+  small,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  label: string;
+  small?: boolean;
+}) {
+  const size = small ? "w-7 h-7" : "w-9 h-9";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`${size} flex items-center justify-center rounded-md text-textDim hover:text-text hover:bg-surface2 border border-transparent hover:border-border transition-colors`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
   );
 }
 
@@ -315,7 +473,7 @@ function NumberInput({
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onChange(n);
         }}
-        className={`w-full bg-surface2 border border-border rounded-md py-2 text-[13px] font-mono tabular-nums focus:outline-none focus:border-accent ${
+        className={`w-full bg-surface2 border border-border rounded-md py-2 text-[13px] font-mono tabular-nums focus:outline-none focus:border-accent text-text ${
           prefix ? "pl-6" : "pl-2.5"
         } ${suffix ? "pr-6" : "pr-2.5"}`}
       />
@@ -542,7 +700,7 @@ function RplRow({
             const n = Number(e.target.value);
             if (Number.isFinite(n)) onChange(n);
           }}
-          className={`w-full bg-surface2 border rounded-md py-1 pl-5 pr-1.5 text-[11px] font-mono tabular-nums focus:outline-none focus:border-accent ${
+          className={`w-full bg-surface2 border rounded-md py-1 pl-5 pr-1.5 text-[11px] font-mono tabular-nums focus:outline-none focus:border-accent text-text ${
             isOverridden ? "border-accent/60" : "border-border"
           }`}
         />
@@ -580,7 +738,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       autoComplete="off"
       spellCheck={false}
-      className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent"
+      className="w-full bg-surface2 border border-border rounded-md px-2.5 py-2 text-[13px] font-mono focus:outline-none focus:border-accent text-text"
     />
   );
 }

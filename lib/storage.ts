@@ -10,6 +10,8 @@ const KEYS = {
   account: "cpa.account.v1",
   rplOverrides: "cpa.rpl.v1",
   matchOverrides: "cpa.matches.v1",
+  sidebarCollapsed: "cpa.sidebar.collapsed.v1",
+  chartOrder: "cpa.chart.order.v1",
 } as const;
 
 function isBrowser(): boolean {
@@ -84,4 +86,38 @@ export function loadMatchOverrides(): CreativeMatchOverrides {
 export function saveMatchOverrides(o: CreativeMatchOverrides): void {
   if (!isBrowser()) return;
   window.localStorage.setItem(KEYS.matchOverrides, JSON.stringify(o));
+}
+
+export function loadSidebarCollapsed(): boolean {
+  if (!isBrowser()) return false;
+  try {
+    return window.localStorage.getItem(KEYS.sidebarCollapsed) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveSidebarCollapsed(collapsed: boolean): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.sidebarCollapsed, collapsed ? "1" : "0");
+}
+
+export function loadChartOrder(): string[] {
+  if (!isBrowser()) return [];
+  try {
+    const raw = window.localStorage.getItem(KEYS.chartOrder);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+      return parsed;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveChartOrder(order: string[]): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(KEYS.chartOrder, JSON.stringify(order));
 }
