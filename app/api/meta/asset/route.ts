@@ -6,6 +6,8 @@ import {
   extensionFor,
   extractAssetRefs,
   fetchAd,
+  fetchAdAssetBreakdown,
+  mergeRefs,
   resolveAssetUrls,
   safeFilename,
   summarizeCreative,
@@ -49,10 +51,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
 
-    const refs = extractAssetRefs(ad.creative);
+    const creativeRefs = extractAssetRefs(ad.creative);
+    const breakdown = await fetchAdAssetBreakdown(adId, token);
+    const refs = mergeRefs(creativeRefs, breakdown.refs);
     const shape = summarizeCreative(ad.creative);
     if (refs.length === 0) {
-      return jsonError(`No assets found in creative. Shape: ${shape}`, 404);
+      return jsonError(
+        `No assets found. Creative: ${shape}. Breakdown errors: ${breakdown.errors.join("; ") || "none"}`,
+        404,
+      );
     }
 
     const resolved = await resolveAssetUrls(refs, token, ad.account_id);
@@ -92,6 +99,8 @@ export async function POST(req: NextRequest): Promise<Response> {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
         "X-Asset-Found": String(refs.length),
+        "X-Asset-Creative": String(creativeRefs.length),
+        "X-Asset-Breakdown": String(breakdown.refs.length),
         "X-Asset-Resolved": String(resolved.length),
         "X-Asset-Added": String(appended),
         "X-Creative-Shape": shape,

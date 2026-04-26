@@ -244,6 +244,97 @@ export async function resolveVideoSource(videoId: string, token: string): Promis
   return v.source;
 }
 
+type InsightsAssetRow = {
+  image_asset?: { id?: string; hash?: string; name?: string; url?: string; image_url?: string };
+  video_asset?: { id?: string; video_id?: string; name?: string; url?: string };
+};
+
+async function fetchInsightsBreakdown(
+  adId: string,
+  token: string,
+  breakdown: "image_asset" | "video_asset",
+): Promise<InsightsAssetRow[]> {
+  const json = await graphGet<{ data?: InsightsAssetRow[] }>(`${adId}/insights`, token, {
+    breakdowns: breakdown,
+    fields: breakdown,
+    date_preset: "maximum",
+    limit: "500",
+  });
+  return json.data || [];
+}
+
+export async function fetchAdAssetBreakdown(
+  adId: string,
+  token: string,
+): Promise<{ refs: AssetRef[]; errors: string[] }> {
+  const refs: AssetRef[] = [];
+  const errors: string[] = [];
+
+  try {
+    const rows = await fetchInsightsBreakdown(adId, token, "image_asset");
+    rows.forEach((row, i) => {
+      const a = row.image_asset;
+      if (!a) return;
+      const idx = String(i + 1).padStart(2, "0");
+      const stem = sanitizeLabel(a.name) || a.id || `image-${idx}`;
+      const label = `breakdown-${idx}-${stem}`;
+      const url = a.url || a.image_url;
+      if (url) {
+        refs.push({ kind: "image", url, label });
+      } else if (a.hash) {
+        refs.push({ kind: "image-hash", hash: a.hash, label });
+      }
+    });
+  } catch (e) {
+    errors.push(`image_asset: ${e instanceof Error ? e.message : "failed"}`);
+  }
+
+  try {
+    const rows = await fetchInsightsBreakdown(adId, token, "video_asset");
+    rows.forEach((row, i) => {
+      const a = row.video_asset;
+      if (!a) return;
+      const idx = String(i + 1).padStart(2, "0");
+      const stem = sanitizeLabel(a.name) || a.id || `video-${idx}`;
+      const label = `breakdown-${idx}-${stem}`;
+      if (a.video_id) {
+        refs.push({ kind: "video", videoId: a.video_id, url: a.url, label });
+      }
+    });
+  } catch (e) {
+    errors.push(`video_asset: ${e instanceof Error ? e.message : "failed"}`);
+  }
+
+  return { refs, errors };
+}
+
+function sanitizeLabel(name: string | undefined): string {
+  if (!name) return "";
+  return name
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+export function mergeRefs(...lists: AssetRef[][]): AssetRef[] {
+  const seen = new Set<string>();
+  const out: AssetRef[] = [];
+  for (const list of lists) {
+    for (const r of list) {
+      const key =
+        r.kind === "image"
+          ? `i:${r.url}`
+          : r.kind === "image-hash"
+            ? `h:${r.hash}`
+            : `v:${r.videoId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
 export async function resolveImageHashes(
   accountId: string,
   hashes: string[],
