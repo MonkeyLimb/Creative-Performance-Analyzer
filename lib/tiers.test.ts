@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classify } from "./tiers";
+import { classify, derivedCplBand } from "./tiers";
 import { Creative, DEFAULT_THRESHOLDS } from "./types";
 
 function fakeCreative(overrides: Partial<Creative> = {}): Creative {
@@ -61,5 +61,32 @@ describe("classify", () => {
         null,
       ),
     ).toBe("watch");
+  });
+});
+
+describe("derivedCplBand", () => {
+  it("derives per-program CPL break points from RPL and ROAS thresholds", () => {
+    // FSU economics: $75 RPL with 2x winner / 1x cut → winner ≤ $37.50, cut ≥ $75
+    expect(derivedCplBand(75, DEFAULT_THRESHOLDS)).toEqual({
+      winnerCpl: 37.5,
+      cutCpl: 75,
+    });
+    // CCI economics: $27 RPL → winner ≤ $13.50, cut ≥ $27
+    expect(derivedCplBand(27, DEFAULT_THRESHOLDS)).toEqual({
+      winnerCpl: 13.5,
+      cutCpl: 27,
+    });
+  });
+
+  it("returns null for non-positive RPL or invalid thresholds", () => {
+    expect(derivedCplBand(0, DEFAULT_THRESHOLDS)).toBeNull();
+    expect(derivedCplBand(-10, DEFAULT_THRESHOLDS)).toBeNull();
+    expect(derivedCplBand(NaN, DEFAULT_THRESHOLDS)).toBeNull();
+    expect(
+      derivedCplBand(50, { ...DEFAULT_THRESHOLDS, winnerRoas: 0 }),
+    ).toBeNull();
+    expect(
+      derivedCplBand(50, { ...DEFAULT_THRESHOLDS, cutRoas: 0 }),
+    ).toBeNull();
   });
 });

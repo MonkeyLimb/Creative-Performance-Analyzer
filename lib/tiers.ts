@@ -43,6 +43,24 @@ export type TierSummary = {
   cpl: number | null;
 };
 
+export type CplBand = {
+  winnerCpl: number;
+  cutCpl: number;
+};
+
+// Given a program's RPL and the global ROAS thresholds, derive the equivalent
+// per-program CPL band. Equates the ROAS classifier's break points in CPL
+// space so the user can see their target as a CPL number, not just a ROAS multiplier.
+export function derivedCplBand(rpl: number, t: Thresholds): CplBand | null {
+  if (!Number.isFinite(rpl) || rpl <= 0) return null;
+  if (!Number.isFinite(t.winnerRoas) || t.winnerRoas <= 0) return null;
+  if (!Number.isFinite(t.cutRoas) || t.cutRoas <= 0) return null;
+  return {
+    winnerCpl: rpl / t.winnerRoas,
+    cutCpl: rpl / t.cutRoas,
+  };
+}
+
 export function summarize(
   creatives: Creative[],
   t: Thresholds,
