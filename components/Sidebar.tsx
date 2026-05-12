@@ -9,6 +9,7 @@ import {
   schoolKey,
 } from "@/lib/schools";
 import { Theme } from "@/lib/theme";
+import { derivedCplBand } from "@/lib/tiers";
 import { TopN } from "./CplChart";
 
 type Props = {
@@ -242,6 +243,7 @@ export function Sidebar({
       <RplSection
         rplOverrides={rplOverrides}
         onRplOverridesChange={onRplOverridesChange}
+        thresholds={thresholds}
       />
 
       <button
@@ -556,9 +558,11 @@ function ThresholdsSection({
 function RplSection({
   rplOverrides,
   onRplOverridesChange,
+  thresholds,
 }: {
   rplOverrides: RplOverrides;
   onRplOverridesChange: (o: RplOverrides) => void;
+  thresholds: Thresholds;
 }) {
   const [openSchool, setOpenSchool] = useState<string | null>(null);
 
@@ -601,8 +605,10 @@ function RplSection({
       }
     >
       <div className="text-[10px] text-textDim leading-[1.4]">
-        Per-program RPL drives Revenue and ROAS. Edit defaults below; values are
-        stored per browser.
+        Per-program RPL drives Revenue and ROAS. CPL targets below are derived
+        from RPL and your ROAS thresholds ({thresholds.winnerRoas}× winner /
+        {" "}
+        {thresholds.cutRoas}× cut).
       </div>
       <div className="flex flex-col gap-1.5">
         {SCHOOL_REGISTRY.map((school) => {
@@ -633,12 +639,16 @@ function RplSection({
                 </span>
               </button>
               {isOpen && (
-                <div className="border-t border-border px-2.5 py-2 flex flex-col gap-1.5 bg-surface">
+                <div className="border-t border-border px-2.5 py-2 flex flex-col gap-2 bg-surface">
                   <RplRow
                     label={`${school.name} (school default)`}
                     value={rplOverrides.schools[sKey] ?? school.defaultRpl}
                     isOverridden={rplOverrides.schools[sKey] != null}
                     onChange={(v) => setSchoolRpl(school.name, v)}
+                    caption={cplBandCaption(
+                      rplOverrides.schools[sKey] ?? school.defaultRpl,
+                      thresholds,
+                    )}
                   />
                   {school.programs.map((p) => {
                     const pKey = programKey(school.name, p.name);
@@ -653,6 +663,7 @@ function RplSection({
                         onChange={(v) =>
                           setProgramRpl(school.name, p.name, v)
                         }
+                        caption={cplBandCaption(value, thresholds)}
                       />
                     );
                   })}
@@ -671,52 +682,75 @@ function RplRow({
   value,
   isOverridden,
   onChange,
+  caption,
 }: {
   label: string;
   value: number;
   isOverridden: boolean;
   onChange: (v: number | null) => void;
+  caption?: string | null;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span
-        className={`flex-1 text-[11px] truncate ${
-          isOverridden ? "text-text" : "text-textDim"
-        }`}
-        title={label}
-      >
-        {label}
-      </span>
-      <div className="relative w-20">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-textDim text-[11px] font-mono pointer-events-none">
-          $
-        </span>
-        <input
-          type="number"
-          inputMode="decimal"
-          min={0}
-          value={Number.isFinite(value) ? value : ""}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            if (Number.isFinite(n)) onChange(n);
-          }}
-          className={`w-full bg-surface2 border rounded-md py-1 pl-5 pr-1.5 text-[11px] font-mono tabular-nums focus:outline-none focus:border-accent text-text ${
-            isOverridden ? "border-accent/60" : "border-border"
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex-1 text-[11px] truncate ${
+            isOverridden ? "text-text" : "text-textDim"
           }`}
-        />
-      </div>
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className="text-[10px] text-textDim hover:text-cut"
-          title="Reset to default"
+          title={label}
         >
-          ×
-        </button>
+          {label}
+        </span>
+        <div className="relative w-20">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-textDim text-[11px] font-mono pointer-events-none">
+            $
+          </span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            value={Number.isFinite(value) ? value : ""}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) onChange(n);
+            }}
+            className={`w-full bg-surface2 border rounded-md py-1 pl-5 pr-1.5 text-[11px] font-mono tabular-nums focus:outline-none focus:border-accent text-text ${
+              isOverridden ? "border-accent/60" : "border-border"
+            }`}
+          />
+        </div>
+        {isOverridden ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="text-[10px] text-textDim hover:text-cut"
+            title="Reset to default"
+          >
+            ×
+          </button>
+        ) : (
+          <span className="w-[10px]" aria-hidden />
+        )}
+      </div>
+      {caption && (
+        <div className="text-[10px] text-textDim font-mono tabular-nums pl-0.5">
+          {caption}
+        </div>
       )}
     </div>
   );
+}
+
+function cplBandCaption(rpl: number, thresholds: Thresholds): string | null {
+  const band = derivedCplBand(rpl, thresholds);
+  if (!band) return null;
+  return `Target: ≤ $${fmtCpl(band.winnerCpl)} winner · ≥ $${fmtCpl(band.cutCpl)} cut`;
+}
+
+function fmtCpl(v: number): string {
+  return v >= 100 || Number.isInteger(v)
+    ? String(Math.round(v))
+    : v.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function TextInput({
