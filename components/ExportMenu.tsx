@@ -9,6 +9,7 @@ import {
   reportFilename,
   rowsToCsv,
 } from "@/lib/report";
+import { buildHtmlBrief } from "@/lib/brief";
 import { Thresholds } from "@/lib/types";
 
 type Props = {
@@ -47,6 +48,16 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
   const exportMarkdown = () => {
     const md = buildMarkdownReport(rows, summary, thresholds, new Date());
     downloadFile(reportFilename("md"), md, "text/markdown");
+    setOpen(false);
+  };
+
+  const exportHtmlBrief = () => {
+    const html = buildHtmlBrief(rows, summary, thresholds, new Date());
+    downloadFile(
+      reportFilename("html").replace("creative-report", "creative-brief"),
+      html,
+      "text/html",
+    );
     setOpen(false);
   };
 
@@ -97,6 +108,11 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
           role="menu"
           className="absolute right-0 mt-1.5 w-56 bg-surface border border-border rounded-md shadow-lg overflow-hidden z-20"
         >
+          <MenuItem
+            onClick={exportHtmlBrief}
+            title="Synthesized brief (HTML)"
+            hint="Colleague-ready: TL;DR, rollups, kill/scale"
+          />
           <MenuItem
             onClick={exportCsv}
             title="CSV"
