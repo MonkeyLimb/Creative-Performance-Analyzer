@@ -9,7 +9,8 @@ import {
   reportFilename,
   rowsToCsv,
 } from "@/lib/report";
-import { buildHtmlBrief } from "@/lib/brief";
+import { buildHtmlBrief, buildSlackBrief } from "@/lib/brief";
+import { SlackBriefModal } from "./SlackBriefModal";
 import { Thresholds } from "@/lib/types";
 
 type Props = {
@@ -20,6 +21,7 @@ type Props = {
 
 export function ExportMenu({ rows, summary, thresholds }: Props) {
   const [open, setOpen] = useState(false);
+  const [slackText, setSlackText] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,6 +63,11 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
     setOpen(false);
   };
 
+  const openSlackBrief = () => {
+    setSlackText(buildSlackBrief(rows, summary, new Date()));
+    setOpen(false);
+  };
+
   const exportJson = () => {
     const payload = {
       generatedAt: new Date().toISOString(),
@@ -91,6 +98,7 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
   };
 
   return (
+    <>
     <div className="relative" ref={ref}>
       <button
         type="button"
@@ -112,6 +120,11 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
             onClick={exportHtmlBrief}
             title="Synthesized brief (HTML)"
             hint="Colleague-ready: TL;DR, rollups, kill/scale"
+          />
+          <MenuItem
+            onClick={openSlackBrief}
+            title="Slack / email brief"
+            hint="Preview, edit, copy to clipboard"
           />
           <MenuItem
             onClick={exportCsv}
@@ -136,6 +149,13 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
         </div>
       )}
     </div>
+    {slackText != null && (
+      <SlackBriefModal
+        initialText={slackText}
+        onClose={() => setSlackText(null)}
+      />
+    )}
+    </>
   );
 }
 
