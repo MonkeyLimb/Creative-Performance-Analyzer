@@ -2,9 +2,12 @@ import { ReportRow, ReportSummary } from "./report";
 import { TierStatus, Thresholds } from "./types";
 import { fmtCurrency, fmtNumber, fmtRoas } from "./format";
 
+// Briefs are bitesized and creative-first: lead with which ads to act on,
+// keep each list ≤ 5 entries, demote aggregate rollups to an appendix.
 const HIDDEN_WINNER_MIN_ROAS = 2.0;
 const VOLUME_LOSER_MAX_ROAS = 1.0;
 const PARETO_TOP_SHARE = 0.2;
+const BRIEF_LIST_LIMIT = 5;
 
 // Synthesized colleague-facing brief. Pure functions only — the HTML is
 // rendered as a string so it can be downloaded as a single self-contained
@@ -382,10 +385,10 @@ export function buildHtmlBrief(
   const tldr = buildTldr(rows, summary);
   const schools = bySchool(rows);
   const programs = byProgram(rows);
-  const cuts = cutList(rows);
-  const scales = scaleList(rows);
-  const hidden = hiddenWinners(rows);
-  const losers = volumeLosers(rows);
+  const cuts = cutList(rows, BRIEF_LIST_LIMIT);
+  const scales = scaleList(rows, BRIEF_LIST_LIMIT);
+  const hidden = hiddenWinners(rows, BRIEF_LIST_LIMIT);
+  const losers = volumeLosers(rows, BRIEF_LIST_LIMIT);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
   const scope = options.scopeLabel;
 
@@ -418,7 +421,10 @@ export function buildHtmlBrief(
   h1, h2, h3 { margin: 0 0 12px; font-weight: 600; letter-spacing: -0.01em; }
   h1 { font-size: 26px; }
   h2 { font-size: 18px; margin-top: 36px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+  h2.appendix { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: none; margin-top: 44px; }
   h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 24px; }
+  .appendix-section { font-size: 12px; }
+  .appendix-section table th, .appendix-section table td { padding: 5px 8px; font-size: 12px; }
   p { margin: 6px 0; }
   .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
   .tldr { background: var(--soft); border-left: 3px solid var(--ink); padding: 14px 18px; border-radius: 4px; margin: 18px 0 28px; }
@@ -545,10 +551,12 @@ ${
     : ""
 }
 
-<h2>By school</h2>
+<div class="appendix-section">
+<h2 class="appendix">Appendix · rollups</h2>
+<h3 style="margin-top: 14px;">By school</h3>
 ${schoolTable(schools)}
-
-${programs.length > 0 ? `<h2>By program</h2>\n${programTable(programs)}` : ""}
+${programs.length > 0 ? `<h3 style="margin-top: 18px;">By program</h3>\n${programTable(programs)}` : ""}
+</div>
 
 <footer>
   Tier thresholds — Winner ROAS ≥ ${esc(String(thresholds.winnerRoas))}× · Cut ROAS &lt; ${esc(String(thresholds.cutRoas))}× ·
@@ -570,9 +578,8 @@ export function buildSlackBrief(
   options: BriefOptions = {},
 ): string {
   const tldr = buildTldr(rows, summary);
-  const schools = bySchool(rows);
-  const cuts = cutList(rows, 5);
-  const scales = scaleList(rows, 5);
+  const cuts = cutList(rows, BRIEF_LIST_LIMIT);
+  const scales = scaleList(rows, BRIEF_LIST_LIMIT);
   const hidden = hiddenWinners(rows, 3);
   const losers = volumeLosers(rows, 3);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
@@ -633,25 +640,8 @@ export function buildSlackBrief(
     }
   }
 
-  out.push("");
-  out.push(SEP);
-  out.push("");
-  out.push("*By school*");
-  if (schools.length === 0) {
-    out.push("(no data)");
-  } else {
-    for (const s of schools) {
-      const parts = [
-        s.school,
-        fmtCurrency(s.spend),
-        `${fmtNumber(s.leads)} leads`,
-        `${fmtCurrency(s.cpl)} CPL`,
-      ];
-      if (s.roas != null) parts.push(`${fmtRoas(s.roas)} ROAS`);
-      parts.push(`${s.winners}W/${s.cuts}C`);
-      out.push(`• ${parts.join(" · ")}`);
-    }
-  }
+  // Slack briefs intentionally omit per-school rollups — switch Scope in
+  // the modal to share a partner-specific view instead.
 
   return out.join("\n");
 }

@@ -468,6 +468,7 @@ describe("buildHtmlBrief", () => {
     expect(html).toContain("Creative Performance Brief");
     expect(html).toContain("Winner A");
     expect(html).toContain("Cut B");
+    expect(html).toContain("Appendix · rollups");
     expect(html).toContain("By school");
     expect(html).toContain("By program");
     expect(html).toContain("Scale these");
@@ -531,9 +532,26 @@ describe("buildHtmlBrief", () => {
     expect(text).toContain("Loser B");
     expect(text).toContain("(UMA · MBC)");
     expect(text).toContain("frees $250");
-    expect(text).toContain("*By school*");
-    expect(text).toContain("UMA");
-    expect(text).toContain("FSU");
+  });
+
+  it("does not include a per-school rollup in the Slack brief", () => {
+    const text = buildSlackBrief(
+      [
+        fakeRow({
+          status: "winner",
+          school: "UMA",
+          creative: { spend: 100, results: 5, adName: "A" },
+        }),
+        fakeRow({
+          status: "cut",
+          school: "FSU",
+          creative: { spend: 200, results: 0, adName: "B" },
+        }),
+      ],
+      fakeSummary({ totalSpend: 300 }),
+      new Date(),
+    );
+    expect(text).not.toMatch(/^\*By school\*/m);
   });
 
   it("shows the empty state when there are no scale/cut candidates", () => {
@@ -615,6 +633,7 @@ describe("buildHtmlBrief", () => {
       new Date(),
     );
     expect(html).not.toContain("By program");
+    expect(html).toContain("Appendix · rollups");
     expect(html).toContain("By school");
   });
 });
