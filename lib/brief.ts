@@ -352,6 +352,83 @@ ${programs.length > 0 ? `<h2>By program</h2>\n${programTable(programs)}` : ""}
 </html>`;
 }
 
+// Slack-/email-ready plaintext version. Uses Slack mrkdwn (*bold*, • bullets)
+// which renders nicely when pasted into Slack and still reads as plain text
+// in email clients that won't format it.
+export function buildSlackBrief(
+  rows: ReportRow[],
+  summary: ReportSummary,
+  generatedAt: Date,
+): string {
+  const tldr = buildTldr(rows, summary);
+  const schools = bySchool(rows);
+  const cuts = cutList(rows, 5);
+  const scales = scaleList(rows, 5);
+  const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
+  const SEP = "─".repeat(28);
+
+  const out: string[] = [];
+  out.push(`*Creative Performance Brief* — ${fmtDate(generatedAt)}`);
+  out.push("");
+  for (const line of tldr) out.push(line);
+  out.push("");
+  out.push(SEP);
+
+  out.push("");
+  out.push("*🟢 Scale these*");
+  if (scales.length === 0) {
+    out.push("• (no winners this period)");
+  } else {
+    for (const s of scales) {
+      const where = locTag(s.row);
+      out.push(`• ${s.row.creative.adName}${where} — ${s.reason}`);
+    }
+  }
+
+  out.push("");
+  out.push(
+    cuts.length > 0
+      ? `*🔴 Kill these* (frees ${fmtCurrency(totalWasted)})`
+      : "*🔴 Kill these*",
+  );
+  if (cuts.length === 0) {
+    out.push("• (no cut candidates)");
+  } else {
+    for (const c of cuts) {
+      const where = locTag(c.row);
+      out.push(`• ${c.row.creative.adName}${where} — ${c.reason}`);
+    }
+  }
+
+  out.push("");
+  out.push(SEP);
+  out.push("");
+  out.push("*By school*");
+  if (schools.length === 0) {
+    out.push("(no data)");
+  } else {
+    for (const s of schools) {
+      const parts = [
+        s.school,
+        fmtCurrency(s.spend),
+        `${fmtNumber(s.leads)} leads`,
+        `${fmtCurrency(s.cpl)} CPL`,
+      ];
+      if (s.roas != null) parts.push(`${fmtRoas(s.roas)} ROAS`);
+      parts.push(`${s.winners}W/${s.cuts}C`);
+      out.push(`• ${parts.join(" · ")}`);
+    }
+  }
+
+  return out.join("\n");
+}
+
+function locTag(r: ReportRow): string {
+  if (!r.school) return "";
+  if (r.program) return ` (${r.school} · ${r.program})`;
+  return ` (${r.school})`;
+}
+
 function schoolTable(rows: SchoolRollup[]): string {
   if (rows.length === 0) return `<p class="impact">No data.</p>`;
   const head = `<tr>

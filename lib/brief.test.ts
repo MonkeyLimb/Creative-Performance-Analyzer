@@ -3,6 +3,7 @@ import {
   bySchool,
   byProgram,
   buildHtmlBrief,
+  buildSlackBrief,
   buildTldr,
   cutList,
   scaleList,
@@ -317,6 +318,58 @@ describe("buildHtmlBrief", () => {
     );
     expect(html).not.toContain('<script>alert("xss")</script>');
     expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("emits a Slack-ready plaintext block with mrkdwn formatting", () => {
+    const text = buildSlackBrief(
+      [
+        fakeRow({
+          status: "winner",
+          school: "UMA",
+          program: "MBC",
+          roas: 3.2,
+          revenue: 320,
+          creative: { spend: 100, results: 8, cpl: 12.5, adName: "Win A" },
+        }),
+        fakeRow({
+          status: "cut",
+          school: "FSU",
+          creative: { spend: 250, results: 0, adName: "Loser B" },
+        }),
+      ],
+      fakeSummary({
+        totalSpend: 350,
+        totalResults: 8,
+        blendedCpl: 43.75,
+        blendedRoas: 0.91,
+        winners: 1,
+        cuts: 1,
+        cutSpend: 250,
+        winnerShare: 100,
+        topPerformer: "Win A",
+      }),
+      new Date("2026-05-14T10:00:00Z"),
+    );
+    expect(text).toContain("*Creative Performance Brief*");
+    expect(text).toContain("*🟢 Scale these*");
+    expect(text).toContain("*🔴 Kill these*");
+    expect(text).toContain("Win A");
+    expect(text).toContain("Loser B");
+    expect(text).toContain("(UMA · MBC)");
+    expect(text).toContain("frees $250");
+    expect(text).toContain("*By school*");
+    expect(text).toContain("UMA");
+    expect(text).toContain("FSU");
+  });
+
+  it("shows the empty state when there are no scale/cut candidates", () => {
+    const text = buildSlackBrief(
+      [],
+      fakeSummary(),
+      new Date("2026-05-14T10:00:00Z"),
+    );
+    expect(text).toContain("(no winners this period)");
+    expect(text).toContain("(no cut candidates)");
   });
 
   it("omits the By program section when no program-matched rows exist", () => {
