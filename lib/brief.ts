@@ -1,6 +1,10 @@
 import { ReportRow, ReportSummary } from "./report";
-import { Thresholds } from "./types";
+import { TierStatus, Thresholds } from "./types";
 import { fmtCurrency, fmtNumber, fmtRoas } from "./format";
+
+const HIDDEN_WINNER_MIN_ROAS = 2.0;
+const VOLUME_LOSER_MAX_ROAS = 1.0;
+const PARETO_TOP_SHARE = 0.2;
 
 // Synthesized colleague-facing brief. Pure functions only — the HTML is
 // rendered as a string so it can be downloaded as a single self-contained
@@ -108,6 +112,153 @@ export function byProgram(rows: ReportRow[]): ProgramRollup[] {
   return Array.from(map.values()).sort((a, b) => b.spend - a.spend);
 }
 
+export type ParetoSummary = {
+  topShare: number; // 0.2 for the top 20%
+  topCreatives: number;
+  totalCreatives: number;
+  topSpendShare: number; // 0..1 — share of total spend
+  topLeadsShare: number; // 0..1 — share of total leads
+};
+
+// Standard concentration check: what share of spend and leads sit in the
+// top X% of creatives by spend? Highlights when budget is over-concentrated.
+export function paretoSummary(
+  rows: ReportRow[],
+  topShare = PARETO_TOP_SHARE,
+): ParetoSummary | null {
+  if (rows.length === 0) return null;
+  const totalSpend = rows.reduce((s, r) => s + r.creative.spend, 0);
+  const totalLeads = rows.reduce((s, r) => s + r.creative.results, 0);
+  const cutoff = Math.max(1, Math.ceil(rows.length * topShare));
+  const sorted = [...rows].sort((a, b) => b.creative.spend - a.creative.spend);
+  const top = sorted.slice(0, cutoff);
+  const topSpend = top.reduce((s, r) => s + r.creative.spend, 0);
+  const topLeads = top.reduce((s, r) => s + r.creative.results, 0);
+  return {
+    topShare,
+    topCreatives: top.length,
+    totalCreatives: rows.length,
+    topSpendShare: totalSpend > 0 ? topSpend / totalSpend : 0,
+    topLeadsShare: totalLeads > 0 ? topLeads / totalLeads : 0,
+  };
+}
+
+export type HiddenWinner = {
+  row: ReportRow;
+  reason: string;
+};
+
+// High-ROAS creatives that aren't getting much budget. The point is to
+// surface things that worked but didn't get scaled. Excludes anything
+// already in the top of scaleList by ROAS so the lists don't duplicate.
+export function hiddenWinners(
+  rows: ReportRow[],
+  limit = 5,
+): HiddenWinner[] {
+  const withRoas = rows.filter(
+    (r) => r.roas != null && r.roas >= HIDDEN_WINNER_MIN_ROAS,
+  );
+  if (withRoas.length === 0) return [];
+  const spends = rows.map((r) => r.creative.spend).filter((s) => s > 0);
+  const medianSpend = median(spends);
+  const candidates = withRoas
+    .filter((r) => r.creative.spend < medianSpend)
+    .sort((a, b) => (b.roas as number) - (a.roas as number))
+    .slice(0, limit);
+  return candidates.map((row) => ({
+    row,
+    reason: `${fmtRoas(row.roas)} ROAS on only ${fmtCurrency(row.creative.spend)} — under-scaled.`,
+  }));
+}
+
+// Big spenders with sub-1× ROAS — over-scaled, ease the foot off.
+// Excludes tier=winner (winners with ROAS<1 shouldn't happen, but defend
+// against threshold weirdness) and tier=cut (those are already in cutList).
+export function volumeLosers(rows: ReportRow[], limit = 5): HiddenWinner[] {
+  const spends = rows.map((r) => r.creative.spend).filter((s) => s > 0);
+  if (spends.length === 0) return [];
+  const sortedSpends = [...spends].sort((a, b) => a - b);
+  const q3 = sortedSpends[Math.floor(sortedSpends.length * 0.75)] ?? 0;
+  const candidates = rows
+    .filter((r) => r.status !== "cut" && r.creative.spend >= q3)
+    .filter((r) => r.roas != null && r.roas < VOLUME_LOSER_MAX_ROAS)
+    .sort((a, b) => b.creative.spend - a.creative.spend)
+    .slice(0, limit);
+  return candidates.map((row) => ({
+    row,
+    reason: `${fmtCurrency(row.creative.spend)} spent at ${fmtRoas(row.roas)} ROAS — pull back.`,
+  }));
+}
+
+export function filterRowsBySchool(
+  rows: ReportRow[],
+  school: string | null,
+): ReportRow[] {
+  if (!school) return rows;
+  return rows.filter((r) => r.school === school);
+}
+
+export function availableSchools(rows: ReportRow[]): string[] {
+  const set = new Set<string>();
+  for (const r of rows) {
+    if (r.school) set.add(r.school);
+  }
+  return Array.from(set).sort();
+}
+
+// Recompute the summary block from a (possibly filtered) row set so a
+// per-school brief shows that school's totals, not the whole account's.
+export function recomputeSummary(rows: ReportRow[]): ReportSummary {
+  const totalSpend = rows.reduce((s, r) => s + r.creative.spend, 0);
+  const totalResults = rows.reduce((s, r) => s + r.creative.results, 0);
+  let totalRevenue: number | null = null;
+  let revAttr = false;
+  for (const r of rows) {
+    if (r.revenue != null) {
+      totalRevenue = (totalRevenue ?? 0) + r.revenue;
+      revAttr = true;
+    }
+  }
+  const blendedCpl = totalResults > 0 ? totalSpend / totalResults : null;
+  const blendedRoas =
+    revAttr && totalSpend > 0 ? (totalRevenue ?? 0) / totalSpend : null;
+  const byTier = (t: TierStatus) => rows.filter((r) => r.status === t);
+  const winners = byTier("winner");
+  const watch = byTier("watch");
+  const cuts = byTier("cut");
+  const cutSpend = cuts.reduce((s, r) => s + r.creative.spend, 0);
+  const winnerLeads = winners.reduce((s, r) => s + r.creative.results, 0);
+  const winnerShare = totalResults > 0 ? (winnerLeads / totalResults) * 100 : 0;
+  const activeCount = rows.filter(
+    (r) => r.creative.delivery === "active",
+  ).length;
+  const top = winners
+    .filter((w) => w.roas != null)
+    .sort((a, b) => (b.roas as number) - (a.roas as number))[0];
+  return {
+    totalSpend,
+    totalResults,
+    totalRevenue,
+    blendedCpl,
+    blendedRoas,
+    winners: winners.length,
+    watch: watch.length,
+    cuts: cuts.length,
+    cutSpend,
+    winnerShare,
+    activeCount,
+    topPerformer: top?.creative.adName ?? null,
+  };
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted[mid];
+}
+
 export function cutList(rows: ReportRow[], limit = 10): CutCandidate[] {
   const cuts = rows
     .filter((r) => r.status === "cut")
@@ -187,6 +338,14 @@ export function buildTldr(rows: ReportRow[], summary: ReportSummary): Tldr {
     );
   }
 
+  const pareto = paretoSummary(rows);
+  if (pareto && pareto.totalCreatives >= 5) {
+    const pct = (n: number) => `${Math.round(n * 100)}%`;
+    lines.push(
+      `Top ${pct(pareto.topShare)} of creatives (${fmtNumber(pareto.topCreatives)}) account for ${pct(pareto.topSpendShare)} of spend and ${pct(pareto.topLeadsShare)} of leads.`,
+    );
+  }
+
   if (summary.topPerformer) {
     lines.push(`Top performer: "${summary.topPerformer}".`);
   }
@@ -209,24 +368,32 @@ function esc(s: string | number | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
+export type BriefOptions = {
+  scopeLabel?: string;
+};
+
 export function buildHtmlBrief(
   rows: ReportRow[],
   summary: ReportSummary,
   thresholds: Thresholds,
   generatedAt: Date,
+  options: BriefOptions = {},
 ): string {
   const tldr = buildTldr(rows, summary);
   const schools = bySchool(rows);
   const programs = byProgram(rows);
   const cuts = cutList(rows);
   const scales = scaleList(rows);
+  const hidden = hiddenWinners(rows);
+  const losers = volumeLosers(rows);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
+  const scope = options.scopeLabel;
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Creative Performance Brief — ${esc(fmtDate(generatedAt))}</title>
+<title>Creative Performance Brief${scope ? ` — ${esc(scope)}` : ""} — ${esc(fmtDate(generatedAt))}</title>
 <style>
   :root {
     --ink: #1A1F2A;
@@ -288,8 +455,8 @@ export function buildHtmlBrief(
 </head>
 <body>
 
-<h1>Creative Performance Brief</h1>
-<div class="meta">Generated ${esc(fmtDate(generatedAt))} · ${esc(String(rows.length))} creatives</div>
+<h1>Creative Performance Brief${scope ? ` <span style="color: var(--muted); font-weight: 500;">· ${esc(scope)}</span>` : ""}</h1>
+<div class="meta">Generated ${esc(fmtDate(generatedAt))} · ${esc(String(rows.length))} creatives${scope ? ` · scoped to ${esc(scope)}` : ""}</div>
 
 <div class="tldr">
 ${tldr.map((line) => `  <p>${esc(line)}</p>`).join("\n")}
@@ -337,6 +504,47 @@ ${tldr.map((line) => `  <p>${esc(line)}</p>`).join("\n")}
   </div>
 </div>
 
+${
+  hidden.length > 0 || losers.length > 0
+    ? `<h2>Hidden moves</h2>
+<div class="cards">
+  <div class="card scale">
+    <h3>Hidden winners</h3>
+    ${
+      hidden.length === 0
+        ? `<p class="impact">No under-scaled high-ROAS creatives.</p>`
+        : `<ol>${hidden
+            .map(
+              (h) => `<li>
+        <span class="name">${esc(h.row.creative.adName)}</span>
+        <span class="why">${esc(h.row.school ?? "—")}${h.row.program ? ` · ${esc(h.row.program)}` : ""} · ${esc(h.reason)}</span>
+      </li>`,
+            )
+            .join("\n        ")}</ol>
+       <p class="impact">High ROAS but tiny spend — give these more budget.</p>`
+    }
+  </div>
+  <div class="card kill">
+    <h3>Volume losers</h3>
+    ${
+      losers.length === 0
+        ? `<p class="impact">No over-scaled low-ROAS creatives.</p>`
+        : `<ol>${losers
+            .map(
+              (l) => `<li>
+        <span class="name">${esc(l.row.creative.adName)}</span>
+        <span class="why">${esc(l.row.school ?? "—")}${l.row.program ? ` · ${esc(l.row.program)}` : ""} · ${esc(l.reason)}</span>
+      </li>`,
+            )
+            .join("\n        ")}</ol>
+       <p class="impact">High spend but ROAS below 1× — pull back before more budget burns.</p>`
+    }
+  </div>
+</div>
+`
+    : ""
+}
+
 <h2>By school</h2>
 ${schoolTable(schools)}
 
@@ -359,16 +567,22 @@ export function buildSlackBrief(
   rows: ReportRow[],
   summary: ReportSummary,
   generatedAt: Date,
+  options: BriefOptions = {},
 ): string {
   const tldr = buildTldr(rows, summary);
   const schools = bySchool(rows);
   const cuts = cutList(rows, 5);
   const scales = scaleList(rows, 5);
+  const hidden = hiddenWinners(rows, 3);
+  const losers = volumeLosers(rows, 3);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
+  const scope = options.scopeLabel;
   const SEP = "─".repeat(28);
 
   const out: string[] = [];
-  out.push(`*Creative Performance Brief* — ${fmtDate(generatedAt)}`);
+  out.push(
+    `*Creative Performance Brief*${scope ? ` · ${scope}` : ""} — ${fmtDate(generatedAt)}`,
+  );
   out.push("");
   for (const line of tldr) out.push(line);
   out.push("");
@@ -397,6 +611,25 @@ export function buildSlackBrief(
     for (const c of cuts) {
       const where = locTag(c.row);
       out.push(`• ${c.row.creative.adName}${where} — ${c.reason}`);
+    }
+  }
+
+  if (hidden.length > 0 || losers.length > 0) {
+    out.push("");
+    out.push(SEP);
+  }
+  if (hidden.length > 0) {
+    out.push("");
+    out.push("*💎 Hidden winners* (scale these up)");
+    for (const h of hidden) {
+      out.push(`• ${h.row.creative.adName}${locTag(h.row)} — ${h.reason}`);
+    }
+  }
+  if (losers.length > 0) {
+    out.push("");
+    out.push("*⚠️ Volume losers* (pull back)");
+    for (const l of losers) {
+      out.push(`• ${l.row.creative.adName}${locTag(l.row)} — ${l.reason}`);
     }
   }
 

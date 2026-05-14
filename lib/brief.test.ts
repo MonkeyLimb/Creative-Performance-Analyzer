@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  availableSchools,
   bySchool,
   byProgram,
   buildHtmlBrief,
   buildSlackBrief,
   buildTldr,
   cutList,
+  filterRowsBySchool,
+  hiddenWinners,
+  paretoSummary,
+  recomputeSummary,
   scaleList,
+  volumeLosers,
 } from "./brief";
 import { ReportRow, ReportSummary } from "./report";
 import { Creative, DEFAULT_THRESHOLDS, TierStatus } from "./types";
@@ -221,6 +227,174 @@ describe("scaleList", () => {
   });
 });
 
+describe("paretoSummary", () => {
+  it("returns null on empty rows", () => {
+    expect(paretoSummary([])).toBeNull();
+  });
+
+  it("rounds the cutoff up to at least 1 creative", () => {
+    const rows = [fakeRow({ creative: { spend: 100, results: 5 } })];
+    const p = paretoSummary(rows, 0.2);
+    expect(p?.topCreatives).toBe(1);
+    expect(p?.topSpendShare).toBe(1);
+    expect(p?.topLeadsShare).toBe(1);
+  });
+
+  it("computes top-20% share of spend and leads", () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      fakeRow({
+        creative: { spend: (i + 1) * 100, results: (i + 1) * 2 },
+      }),
+    );
+    // Total spend: 100+...+1000 = 5500. Top 20% = 2 creatives (i=9, i=8) =
+    // 1000 + 900 = 1900. Share = 1900 / 5500 ≈ 0.3455.
+    const p = paretoSummary(rows, 0.2);
+    expect(p?.topCreatives).toBe(2);
+    expect(p?.topSpendShare).toBeCloseTo(1900 / 5500, 4);
+    expect(p?.topLeadsShare).toBeCloseTo(38 / 110, 4);
+  });
+});
+
+describe("hiddenWinners", () => {
+  it("returns high-ROAS rows with below-median spend", () => {
+    const rows: ReportRow[] = [
+      fakeRow({
+        roas: 3.5,
+        creative: { spend: 20, results: 2, adName: "gem" },
+      }),
+      fakeRow({
+        roas: 2.5,
+        creative: { spend: 30, results: 3, adName: "also-gem" },
+      }),
+      fakeRow({
+        roas: 0.5,
+        creative: { spend: 500, results: 5, adName: "big-loser" },
+      }),
+      fakeRow({
+        roas: 4.0,
+        creative: { spend: 1000, results: 100, adName: "already-scaled" },
+      }),
+    ];
+    const list = hiddenWinners(rows);
+    const names = list.map((h) => h.row.creative.adName);
+    expect(names).toContain("gem");
+    expect(names).toContain("also-gem");
+    expect(names).not.toContain("already-scaled");
+    expect(names).not.toContain("big-loser");
+  });
+
+  it("returns empty when no high-ROAS rows exist", () => {
+    const rows: ReportRow[] = [
+      fakeRow({ roas: 0.5, creative: { spend: 10 } }),
+      fakeRow({ roas: 1.2, creative: { spend: 10 } }),
+    ];
+    expect(hiddenWinners(rows)).toEqual([]);
+  });
+
+  it("returns empty when ROAS data is missing", () => {
+    const rows: ReportRow[] = [fakeRow({ creative: { spend: 10 } })];
+    expect(hiddenWinners(rows)).toEqual([]);
+  });
+});
+
+describe("volumeLosers", () => {
+  it("returns high-spend rows with sub-1× ROAS", () => {
+    const rows: ReportRow[] = [
+      fakeRow({
+        status: "watch",
+        roas: 0.5,
+        creative: { spend: 1000, results: 10, adName: "burner" },
+      }),
+      fakeRow({
+        status: "watch",
+        roas: 2.0,
+        creative: { spend: 1000, results: 10, adName: "ok-winner" },
+      }),
+      fakeRow({
+        status: "watch",
+        roas: 0.4,
+        creative: { spend: 20, results: 1, adName: "small-but-bad" },
+      }),
+      fakeRow({
+        status: "cut",
+        roas: 0.2,
+        creative: { spend: 2000, results: 0, adName: "already-cut" },
+      }),
+      ...Array.from({ length: 4 }, (_, i) =>
+        fakeRow({
+          creative: { spend: 50, results: 1, adName: `noise-${i}` },
+          roas: 1.5,
+        }),
+      ),
+    ];
+    const list = volumeLosers(rows);
+    const names = list.map((l) => l.row.creative.adName);
+    expect(names).toContain("burner");
+    expect(names).not.toContain("already-cut"); // cuts are excluded
+    expect(names).not.toContain("small-but-bad"); // spend below Q3
+    expect(names).not.toContain("ok-winner"); // ROAS too high
+  });
+});
+
+describe("filterRowsBySchool / availableSchools", () => {
+  const rows: ReportRow[] = [
+    fakeRow({ school: "UMA", creative: { adName: "A" } }),
+    fakeRow({ school: "UMA", creative: { adName: "B" } }),
+    fakeRow({ school: "FSU", creative: { adName: "C" } }),
+    fakeRow({ school: null, creative: { adName: "D" } }),
+  ];
+
+  it("filters rows by school", () => {
+    expect(filterRowsBySchool(rows, "UMA")).toHaveLength(2);
+    expect(filterRowsBySchool(rows, "FSU")).toHaveLength(1);
+    expect(filterRowsBySchool(rows, null)).toHaveLength(4);
+  });
+
+  it("returns sorted unique school names, excluding null", () => {
+    expect(availableSchools(rows)).toEqual(["FSU", "UMA"]);
+  });
+});
+
+describe("recomputeSummary", () => {
+  it("recomputes totals + winner/cut counts from a row set", () => {
+    const rows: ReportRow[] = [
+      fakeRow({
+        status: "winner",
+        roas: 3.0,
+        revenue: 300,
+        creative: { spend: 100, results: 5 },
+      }),
+      fakeRow({
+        status: "cut",
+        creative: { spend: 200, results: 0 },
+      }),
+      fakeRow({
+        status: "watch",
+        creative: { spend: 50, results: 2, delivery: "active" },
+      }),
+    ];
+    const s = recomputeSummary(rows);
+    expect(s.totalSpend).toBe(350);
+    expect(s.totalResults).toBe(7);
+    expect(s.winners).toBe(1);
+    expect(s.cuts).toBe(1);
+    expect(s.cutSpend).toBe(200);
+    expect(s.blendedCpl).toBeCloseTo(350 / 7);
+    expect(s.totalRevenue).toBe(300);
+    expect(s.blendedRoas).toBeCloseTo(300 / 350);
+    expect(s.winnerShare).toBeCloseTo((5 / 7) * 100);
+  });
+
+  it("handles empty rows", () => {
+    const s = recomputeSummary([]);
+    expect(s.totalSpend).toBe(0);
+    expect(s.blendedCpl).toBeNull();
+    expect(s.blendedRoas).toBeNull();
+    expect(s.winners).toBe(0);
+    expect(s.topPerformer).toBeNull();
+  });
+});
+
 describe("buildTldr", () => {
   it("includes a headline metric line", () => {
     const tldr = buildTldr(
@@ -370,6 +544,60 @@ describe("buildHtmlBrief", () => {
     );
     expect(text).toContain("(no winners this period)");
     expect(text).toContain("(no cut candidates)");
+  });
+
+  it("renders Hidden winners + Volume losers sections in the HTML brief", () => {
+    const rows: ReportRow[] = [
+      fakeRow({
+        status: "watch",
+        roas: 3.4,
+        creative: { spend: 25, results: 1, cpl: 25, adName: "underScaled" },
+      }),
+      fakeRow({
+        status: "watch",
+        roas: 0.5,
+        creative: { spend: 800, results: 10, cpl: 80, adName: "overScaled" },
+      }),
+      ...Array.from({ length: 6 }, (_, i) =>
+        fakeRow({
+          creative: { spend: 200, results: 5, cpl: 40, adName: `filler-${i}` },
+          roas: 1.5,
+        }),
+      ),
+    ];
+    const html = buildHtmlBrief(
+      rows,
+      recomputeSummary(rows),
+      DEFAULT_THRESHOLDS,
+      new Date(),
+    );
+    expect(html).toContain("Hidden moves");
+    expect(html).toContain("Hidden winners");
+    expect(html).toContain("Volume losers");
+    expect(html).toContain("underScaled");
+    expect(html).toContain("overScaled");
+  });
+
+  it("includes scope label in the HTML title and header when provided", () => {
+    const html = buildHtmlBrief(
+      [fakeRow({ school: "UMA" })],
+      fakeSummary({ totalSpend: 100 }),
+      DEFAULT_THRESHOLDS,
+      new Date(),
+      { scopeLabel: "UMA only" },
+    );
+    expect(html).toContain("UMA only");
+    expect(html).toMatch(/scoped to UMA only/);
+  });
+
+  it("includes scope label in the Slack brief header when provided", () => {
+    const text = buildSlackBrief(
+      [fakeRow({ school: "UMA" })],
+      fakeSummary({ totalSpend: 100 }),
+      new Date("2026-05-14"),
+      { scopeLabel: "UMA only" },
+    );
+    expect(text).toMatch(/^\*Creative Performance Brief\* · UMA only/);
   });
 
   it("omits the By program section when no program-matched rows exist", () => {

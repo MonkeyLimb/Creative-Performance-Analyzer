@@ -9,8 +9,9 @@ import {
   reportFilename,
   rowsToCsv,
 } from "@/lib/report";
-import { buildHtmlBrief, buildSlackBrief } from "@/lib/brief";
+import { buildHtmlBrief } from "@/lib/brief";
 import { SlackBriefModal } from "./SlackBriefModal";
+import { HtmlBriefPicker } from "./HtmlBriefPicker";
 import { Thresholds } from "@/lib/types";
 
 type Props = {
@@ -21,7 +22,8 @@ type Props = {
 
 export function ExportMenu({ rows, summary, thresholds }: Props) {
   const [open, setOpen] = useState(false);
-  const [slackText, setSlackText] = useState<string | null>(null);
+  const [slackOpen, setSlackOpen] = useState(false);
+  const [htmlPickerOpen, setHtmlPickerOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,7 +66,12 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
   };
 
   const openSlackBrief = () => {
-    setSlackText(buildSlackBrief(rows, summary, new Date()));
+    setSlackOpen(true);
+    setOpen(false);
+  };
+
+  const openHtmlPicker = () => {
+    setHtmlPickerOpen(true);
     setOpen(false);
   };
 
@@ -119,7 +126,12 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
           <MenuItem
             onClick={exportHtmlBrief}
             title="Synthesized brief (HTML)"
-            hint="Colleague-ready: TL;DR, rollups, kill/scale"
+            hint="All schools · TL;DR, rollups, kill/scale"
+          />
+          <MenuItem
+            onClick={openHtmlPicker}
+            title="HTML brief by school…"
+            hint="Pick a partner for a scoped brief"
           />
           <MenuItem
             onClick={openSlackBrief}
@@ -149,10 +161,19 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
         </div>
       )}
     </div>
-    {slackText != null && (
+    {slackOpen && (
       <SlackBriefModal
-        initialText={slackText}
-        onClose={() => setSlackText(null)}
+        rows={rows}
+        summary={summary}
+        onClose={() => setSlackOpen(false)}
+      />
+    )}
+    {htmlPickerOpen && (
+      <HtmlBriefPicker
+        rows={rows}
+        summary={summary}
+        thresholds={thresholds}
+        onClose={() => setHtmlPickerOpen(false)}
       />
     )}
     </>
