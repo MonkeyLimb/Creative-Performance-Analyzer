@@ -42,6 +42,9 @@ type Props = {
   rplOverrides: RplOverrides;
   matchOverrides: CreativeMatchOverrides;
   onMatchOverridesChange: (o: CreativeMatchOverrides) => void;
+  selectedKeys: Set<string>;
+  onToggleSelected: (key: string) => void;
+  selectionLimitReached: boolean;
 };
 
 const STATUS_RANK: Record<TierStatus, number> = {
@@ -67,6 +70,9 @@ export function CreativesTable({
   rplOverrides,
   matchOverrides,
   onMatchOverridesChange,
+  selectedKeys,
+  onToggleSelected,
+  selectionLimitReached,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "spend",
@@ -153,6 +159,7 @@ export function CreativesTable({
         <table className="w-full text-sm">
           <thead className="bg-surface2 border-b border-border text-xs uppercase tracking-wider text-textDim">
             <tr>
+              <th className="px-2 py-2.5 w-[1%] whitespace-nowrap" />
               <SortableTH
                 label="Creative"
                 sortKey="adName"
@@ -227,11 +234,36 @@ export function CreativesTable({
             {sorted.map(({ creative: c, status, roas, key }) => {
               const adsUrl = isClickable ? safeBuildAdsUrl(c, account) : null;
               const roasColor = roasTone(roas.roas);
+              const isSelected = selectedKeys.has(key);
+              const checkboxDisabled = !isSelected && selectionLimitReached;
               return (
               <tr
                 key={key}
-                className="border-b border-border last:border-b-0"
+                className={`border-b border-border last:border-b-0 ${
+                  isSelected ? "bg-accent/5" : ""
+                }`}
               >
+                <td className="px-2 py-2.5 w-[1%] whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={checkboxDisabled}
+                    onChange={() => onToggleSelected(key)}
+                    className="cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    title={
+                      checkboxDisabled
+                        ? "Up to 4 creatives can be compared"
+                        : isSelected
+                          ? "Remove from comparison"
+                          : "Add to comparison"
+                    }
+                    aria-label={
+                      isSelected
+                        ? `Remove ${c.adName} from comparison`
+                        : `Add ${c.adName} to comparison`
+                    }
+                  />
+                </td>
                 <td className="px-3 py-2.5 max-w-sm">
                   <div
                     className="flex items-center gap-1.5 truncate"
