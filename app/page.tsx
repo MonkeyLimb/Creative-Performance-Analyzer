@@ -55,6 +55,7 @@ import {
   DeliveryFilter,
 } from "@/components/CreativesTable";
 import { DiffPanel } from "@/components/DiffPanel";
+import { CompliancePanel } from "@/components/CompliancePanel";
 import { InsightCallout } from "@/components/InsightCallout";
 import {
   DraggableCharts,
@@ -438,6 +439,9 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 min-w-0 w-full">
+        <div className="p-3 sm:p-4 md:p-6 pb-0">
+          <CompliancePanel />
+        </div>
         {!creatives || !metrics || !reportSummary ? (
           <EmptyState />
         ) : (
