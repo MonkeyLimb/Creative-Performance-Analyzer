@@ -10,6 +10,7 @@ import {
   rowsToCsv,
 } from "@/lib/report";
 import { buildHtmlBrief } from "@/lib/brief";
+import { fetchThumbnailUrls, urlsToDataUris } from "@/lib/asset-fetch";
 import { SlackBriefModal } from "./SlackBriefModal";
 import { HtmlBriefPicker } from "./HtmlBriefPicker";
 import { Thresholds } from "@/lib/types";
@@ -18,12 +19,14 @@ type Props = {
   rows: ReportRow[];
   summary: ReportSummary;
   thresholds: Thresholds;
+  metaToken: string;
 };
 
-export function ExportMenu({ rows, summary, thresholds }: Props) {
+export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
   const [open, setOpen] = useState(false);
   const [slackOpen, setSlackOpen] = useState(false);
   const [htmlPickerOpen, setHtmlPickerOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +56,61 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
     const md = buildMarkdownReport(rows, summary, thresholds, new Date());
     downloadFile(reportFilename("md"), md, "text/markdown");
     setOpen(false);
+  };
+
+  const exportMarkdownWithThumbs = async (portable: boolean) => {
+    setOpen(false);
+    const winners = rows.filter(
+      (r) => r.status === "winner" && !!r.creative.adId,
+    );
+    const winnerIds = winners.map((r) => r.creative.adId as string);
+    if (winnerIds.length === 0 || !metaToken) {
+      // No token or no eligible winners: fall back to text-only export rather
+      // than failing loudly. The user can still get the report.
+      exportMarkdown();
+      return;
+    }
+    try {
+      setBusy(
+        portable
+          ? `Fetching ${winnerIds.length} thumbnails…`
+          : `Fetching ${winnerIds.length} thumbnails…`,
+      );
+      const urlMap = await fetchThumbnailUrls(winnerIds, metaToken);
+      let thumbnails: Map<string, string | null> = urlMap;
+      if (portable) {
+        const urls = Array.from(urlMap.values()).filter(
+          (u): u is string => !!u,
+        );
+        setBusy(`Embedding ${urls.length} images…`);
+        const dataUris = await urlsToDataUris(urls);
+        thumbnails = new Map(
+          Array.from(urlMap.entries()).map(([id, url]) => [
+            id,
+            url ? dataUris.get(url) ?? null : null,
+          ]),
+        );
+      }
+      const md = buildMarkdownReport(
+        rows,
+        summary,
+        thresholds,
+        new Date(),
+        thumbnails,
+      );
+      const suffix = portable ? "-portable.md" : ".md";
+      downloadFile(
+        reportFilename("md").replace(/\.md$/, suffix),
+        md,
+        "text/markdown",
+      );
+    } catch {
+      // Fall through to a text-only export so the user still gets something.
+      const md = buildMarkdownReport(rows, summary, thresholds, new Date());
+      downloadFile(reportFilename("md"), md, "text/markdown");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const exportHtmlBrief = () => {
@@ -110,13 +168,14 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 bg-surface2 hover:bg-surface border border-border hover:border-accent/60 text-text rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
+        disabled={!!busy}
+        className="flex items-center gap-1.5 bg-surface2 hover:bg-surface border border-border hover:border-accent/60 text-text rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <DownloadIcon />
-        Export report
-        <span className="text-textDim">▾</span>
+        {busy ?? "Export report"}
+        {!busy && <span className="text-textDim">▾</span>}
       </button>
       {open && (
         <div
@@ -146,7 +205,27 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
           <MenuItem
             onClick={exportMarkdown}
             title="Markdown report"
-            hint="Tiered summary for sharing"
+            hint="Tiered summary, no thumbnails"
+          />
+          <MenuItem
+            onClick={() => exportMarkdownWithThumbs(false)}
+            title="Markdown + thumbnails"
+            hint={
+              metaToken
+                ? "Winner ads include hosted Meta CDN images"
+                : "Needs Meta token in sidebar"
+            }
+            disabled={!metaToken}
+          />
+          <MenuItem
+            onClick={() => exportMarkdownWithThumbs(true)}
+            title="Markdown + thumbnails (portable)"
+            hint={
+              metaToken
+                ? "Images embedded as data URIs — larger file, works offline"
+                : "Needs Meta token in sidebar"
+            }
+            disabled={!metaToken}
           />
           <MenuItem
             onClick={exportJson}
@@ -184,17 +263,20 @@ function MenuItem({
   onClick,
   title,
   hint,
+  disabled,
 }: {
   onClick: () => void;
   title: string;
   hint: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="w-full text-left px-3 py-2 hover:bg-surface2 transition-colors block"
+      disabled={disabled}
+      className="w-full text-left px-3 py-2 hover:bg-surface2 transition-colors block disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
     >
       <div className="text-[12px] font-medium text-text">{title}</div>
       <div className="text-[10px] text-textDim mt-0.5">{hint}</div>

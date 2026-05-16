@@ -222,6 +222,34 @@ async function graphGet<T>(path: string, token: string, params: Record<string, s
   return json as T;
 }
 
+// Walks Meta's creative blob in order of preference and returns the first
+// usable thumbnail URL. Returns null only when no image-like reference exists
+// (e.g. a video creative with no thumbnail and no fallback frame). Pure —
+// reuses MetaCreative without making any network calls.
+export function pickThumbnailUrl(
+  creative: MetaCreative | undefined,
+): string | null {
+  if (!creative) return null;
+  if (creative.image_url) return creative.image_url;
+  if (creative.thumbnail_url) return creative.thumbnail_url;
+  const videoImage = creative.object_story_spec?.video_data?.image_url;
+  if (videoImage) return videoImage;
+  const picture = creative.object_story_spec?.link_data?.picture;
+  if (picture) return picture;
+  const childPicture =
+    creative.object_story_spec?.link_data?.child_attachments?.find(
+      (c) => !!c.picture,
+    )?.picture;
+  if (childPicture) return childPicture;
+  const feedImage = creative.asset_feed_spec?.images?.find((i) => !!i.url)?.url;
+  if (feedImage) return feedImage;
+  const feedVideoThumb = creative.asset_feed_spec?.videos?.find(
+    (v) => !!v.thumbnail_url,
+  )?.thumbnail_url;
+  if (feedVideoThumb) return feedVideoThumb;
+  return null;
+}
+
 export async function fetchAd(adId: string, token: string): Promise<MetaAd> {
   const creativeFields = [
     "id",

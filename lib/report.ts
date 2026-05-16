@@ -102,6 +102,11 @@ export function buildMarkdownReport(
   summary: ReportSummary,
   thresholds: Thresholds,
   generatedAt: Date,
+  // Optional map from adId -> image URL or data URI. When provided, the
+  // Winners table gets a leading "Thumbnail" column populated where a URL
+  // is available. Watch and Cut tables are deliberately left text-only to
+  // keep file size manageable.
+  thumbnails?: Map<string, string | null>,
 ): string {
   const lines: string[] = [];
   lines.push("# Creative Performance Report");
@@ -144,7 +149,7 @@ export function buildMarkdownReport(
   if (winners.length) {
     lines.push("## Winners");
     lines.push("");
-    lines.push(tierTable(winners));
+    lines.push(tierTable(winners, thumbnails));
     lines.push("");
   }
   if (watch.length) {
@@ -163,15 +168,28 @@ export function buildMarkdownReport(
   return lines.join("\n");
 }
 
-function tierTable(rows: ReportRow[]): string {
-  const head =
-    "| Ad name | School | Spend | Leads | CPL | Revenue | ROAS | CTR |";
-  const sep = "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |";
+function tierTable(
+  rows: ReportRow[],
+  thumbnails?: Map<string, string | null>,
+): string {
+  const withThumbs =
+    !!thumbnails &&
+    rows.some((r) => r.creative.adId && !!thumbnails.get(r.creative.adId));
+  const head = withThumbs
+    ? "| Thumbnail | Ad name | School | Spend | Leads | CPL | Revenue | ROAS | CTR |"
+    : "| Ad name | School | Spend | Leads | CPL | Revenue | ROAS | CTR |";
+  const sep = withThumbs
+    ? "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+    : "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |";
   const sorted = [...rows].sort((a, b) => b.creative.spend - a.creative.spend);
   const body = sorted.map((r) => {
     const c = r.creative;
     const name = mdEscape(c.adName);
-    return `| ${name} | ${r.school ?? "—"} | ${fmtCurrency(c.spend)} | ${fmtNumber(c.results)} | ${fmtCurrency(c.cpl)} | ${fmtCurrency(r.revenue)} | ${fmtRoas(r.roas)} | ${fmtPct(c.ctr)} |`;
+    const cells = `${name} | ${r.school ?? "—"} | ${fmtCurrency(c.spend)} | ${fmtNumber(c.results)} | ${fmtCurrency(c.cpl)} | ${fmtCurrency(r.revenue)} | ${fmtRoas(r.roas)} | ${fmtPct(c.ctr)}`;
+    if (!withThumbs) return `| ${cells} |`;
+    const thumb = (c.adId && thumbnails!.get(c.adId)) || null;
+    const thumbCell = thumb ? `![${name}](${thumb})` : "—";
+    return `| ${thumbCell} | ${cells} |`;
   });
   return [head, sep, ...body].join("\n");
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractAssetRefs, extensionFor, mergeRefs, safeFilename } from "./meta-api";
+import {
+  extractAssetRefs,
+  extensionFor,
+  mergeRefs,
+  pickThumbnailUrl,
+  safeFilename,
+} from "./meta-api";
 
 describe("extractAssetRefs", () => {
   it("returns empty for missing creative", () => {
@@ -159,6 +165,88 @@ describe("safeFilename", () => {
 
   it("falls back to 'creative' when fully stripped", () => {
     expect(safeFilename("///")).toBe("creative");
+  });
+});
+
+describe("pickThumbnailUrl", () => {
+  it("returns null for missing or empty creatives", () => {
+    expect(pickThumbnailUrl(undefined)).toBeNull();
+    expect(pickThumbnailUrl({})).toBeNull();
+  });
+
+  it("prefers top-level image_url", () => {
+    expect(
+      pickThumbnailUrl({
+        image_url: "https://cdn/a.jpg",
+        thumbnail_url: "https://cdn/b.jpg",
+      }),
+    ).toBe("https://cdn/a.jpg");
+  });
+
+  it("falls back to thumbnail_url when image_url is absent", () => {
+    expect(pickThumbnailUrl({ thumbnail_url: "https://cdn/t.jpg" })).toBe(
+      "https://cdn/t.jpg",
+    );
+  });
+
+  it("uses video_data.image_url for video creatives without a top-level image", () => {
+    expect(
+      pickThumbnailUrl({
+        object_story_spec: { video_data: { image_url: "https://cdn/v.jpg" } },
+      }),
+    ).toBe("https://cdn/v.jpg");
+  });
+
+  it("uses link_data.picture for link ads", () => {
+    expect(
+      pickThumbnailUrl({
+        object_story_spec: { link_data: { picture: "https://cdn/p.jpg" } },
+      }),
+    ).toBe("https://cdn/p.jpg");
+  });
+
+  it("walks into child carousel attachments", () => {
+    expect(
+      pickThumbnailUrl({
+        object_story_spec: {
+          link_data: {
+            child_attachments: [
+              { video_id: "v1" },
+              { picture: "https://cdn/child.jpg" },
+            ],
+          },
+        },
+      }),
+    ).toBe("https://cdn/child.jpg");
+  });
+
+  it("uses the first asset_feed_spec image with a url", () => {
+    expect(
+      pickThumbnailUrl({
+        asset_feed_spec: {
+          images: [{ hash: "h" }, { url: "https://cdn/feed.jpg" }],
+        },
+      }),
+    ).toBe("https://cdn/feed.jpg");
+  });
+
+  it("uses asset_feed_spec video thumbnails as last resort", () => {
+    expect(
+      pickThumbnailUrl({
+        asset_feed_spec: {
+          videos: [{ video_id: "v", thumbnail_url: "https://cdn/vt.jpg" }],
+        },
+      }),
+    ).toBe("https://cdn/vt.jpg");
+  });
+
+  it("returns null when only hash-only references exist", () => {
+    expect(
+      pickThumbnailUrl({
+        image_hash: "abc",
+        asset_feed_spec: { images: [{ hash: "xyz" }] },
+      }),
+    ).toBeNull();
   });
 });
 

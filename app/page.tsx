@@ -510,6 +510,7 @@ export default function DashboardPage() {
                 rows={reportRows}
                 summary={reportSummary}
                 thresholds={thresholds}
+                metaToken={metaToken}
               />
             </header>
 
