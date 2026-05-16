@@ -31,6 +31,8 @@ import {
 import { loadMetaToken, saveMetaToken } from "@/lib/meta-token";
 import { fmtCurrency, fmtNumber, fmtRoas } from "@/lib/format";
 import { SAMPLE_CSV } from "@/lib/sample-csv";
+import { localStorageCreativeStore } from "@/lib/persistence/storage";
+import { mergeCreatives, summarizeReport } from "@/lib/persistence/merge";
 import {
   CreativeMatchOverrides,
   EMPTY_RPL_OVERRIDES,
@@ -95,6 +97,9 @@ export default function DashboardPage() {
   const [chartHidden, setChartHidden] = useState<string[]>([]);
   const [chartSizes, setChartSizes] = useState<Record<string, ChartSize>>({});
   const [hydrated, setHydrated] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const creativeStore = useMemo(() => localStorageCreativeStore(), []);
 
   useEffect(() => {
     setThresholds(loadThresholds());
@@ -116,8 +121,22 @@ export default function DashboardPage() {
     if (stored.length) setChartOrder(stored);
     setChartHidden(loadChartHidden());
     setChartSizes(loadChartSizes());
+    const persisted = creativeStore.load();
+    if (persisted && persisted.length) setCreatives(persisted);
     setHydrated(true);
-  }, []);
+  }, [creativeStore]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (creatives && creatives.length) creativeStore.save(creatives);
+    else creativeStore.clear();
+  }, [creatives, hydrated, creativeStore]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [toast]);
 
   useEffect(() => {
     if (hydrated) saveThresholds(thresholds);
@@ -163,16 +182,22 @@ export default function DashboardPage() {
     const result = parseCsv(csvText);
     if (!result.ok) {
       setParseError(result.error);
-      setCreatives(null);
       return;
     }
     setParseError(null);
-    setCreatives(result.creatives);
+    const { merged, report } = mergeCreatives(
+      creatives ?? [],
+      result.creatives,
+    );
+    setCreatives(merged);
+    setToast(summarizeReport(report));
   };
 
   const handleClear = () => {
     setCreatives(null);
     setParseError(null);
+    setToast(null);
+    creativeStore.clear();
   };
 
   const decorated = useMemo(() => {
@@ -362,6 +387,23 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 min-w-0 w-full">
+        {toast && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed top-4 right-4 z-50 bg-surface2 border border-border rounded-md shadow-lg px-3.5 py-2 text-xs text-text flex items-center gap-3 max-w-sm"
+          >
+            <span className="font-mono tabular-nums">{toast}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="text-textDim hover:text-text text-[14px] leading-none"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {!creatives || !metrics || !reportSummary ? (
           <EmptyState />
         ) : (
