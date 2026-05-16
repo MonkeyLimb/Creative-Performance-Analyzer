@@ -38,8 +38,10 @@ import {
   EMPTY_RPL_OVERRIDES,
   RplOverrides,
   SCHOOL_REGISTRY,
+  creativeMatchKey,
   deriveRoas,
 } from "@/lib/schools";
+import { DiffItem, MAX_DIFF_CREATIVES, MIN_DIFF_CREATIVES } from "@/lib/diff";
 import { useTheme } from "@/lib/theme";
 import { ReportRow, ReportSummary } from "@/lib/report";
 import { Sidebar } from "@/components/Sidebar";
@@ -54,6 +56,8 @@ import {
   CreativesTable,
   DeliveryFilter,
 } from "@/components/CreativesTable";
+import { DiffPanel } from "@/components/DiffPanel";
+import { CompliancePanel } from "@/components/CompliancePanel";
 import { InsightCallout } from "@/components/InsightCallout";
 import {
   DraggableCharts,
@@ -98,6 +102,10 @@ export default function DashboardPage() {
   const [chartSizes, setChartSizes] = useState<Record<string, ChartSize>>({});
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedDiffKeys, setSelectedDiffKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const creativeStore = useMemo(() => localStorageCreativeStore(), []);
 
@@ -198,6 +206,22 @@ export default function DashboardPage() {
     setParseError(null);
     setToast(null);
     creativeStore.clear();
+    setSelectedDiffKeys(new Set());
+    setDiffOpen(false);
+  };
+
+  const toggleDiffSelected = (key: string) => {
+    setSelectedDiffKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else if (next.size < MAX_DIFF_CREATIVES) next.add(key);
+      return next;
+    });
+  };
+
+  const clearDiffSelection = () => {
+    setSelectedDiffKeys(new Set());
+    setDiffOpen(false);
   };
 
   const decorated = useMemo(() => {
@@ -211,6 +235,59 @@ export default function DashboardPage() {
       };
     });
   }, [creatives, thresholds, rplOverrides, matchOverrides]);
+
+  const selectedDiffItems = useMemo<DiffItem[]>(() => {
+    if (selectedDiffKeys.size === 0) return [];
+    const byKey = new Map(
+      decorated.map((d) => [creativeMatchKey(d.creative), d]),
+    );
+    const items: DiffItem[] = [];
+    for (const key of selectedDiffKeys) {
+      const d = byKey.get(key);
+      if (d) {
+        items.push({ creative: d.creative, roas: d.roas, status: d.status });
+      }
+    }
+    return items;
+  }, [selectedDiffKeys, decorated]);
+
+  const hiddenDiffCount = useMemo(() => {
+    let n = 0;
+    for (const it of selectedDiffItems) {
+      if (tierFilter !== "all" && it.status !== tierFilter) {
+        n++;
+        continue;
+      }
+      if (deliveryFilter === "active" && it.creative.delivery !== "active") {
+        n++;
+        continue;
+      }
+      if (deliveryFilter === "inactive" && it.creative.delivery === "active") {
+        n++;
+      }
+    }
+    return n;
+  }, [selectedDiffItems, tierFilter, deliveryFilter]);
+
+  useEffect(() => {
+    if (selectedDiffKeys.size < MIN_DIFF_CREATIVES && diffOpen) {
+      setDiffOpen(false);
+    }
+  }, [selectedDiffKeys, diffOpen]);
+
+  // Drop selection entries that point to creatives no longer in the dataset
+  // (e.g. after re-analyzing a different CSV).
+  useEffect(() => {
+    if (selectedDiffKeys.size === 0) return;
+    const live = new Set(decorated.map((d) => creativeMatchKey(d.creative)));
+    let mutated = false;
+    const next = new Set<string>();
+    for (const k of selectedDiffKeys) {
+      if (live.has(k)) next.add(k);
+      else mutated = true;
+    }
+    if (mutated) setSelectedDiffKeys(next);
+  }, [decorated, selectedDiffKeys]);
 
   const metrics = useMemo(() => {
     if (!creatives || creatives.length === 0) return null;
@@ -404,6 +481,9 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
+        <div className="p-3 sm:p-4 md:p-6 pb-0">
+          <CompliancePanel />
+        </div>
         {!creatives || !metrics || !reportSummary ? (
           <EmptyState />
         ) : (
@@ -551,6 +631,55 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {selectedDiffKeys.size > 0 && (
+                <div className="flex items-center justify-between gap-3 px-3 py-2 bg-surface2 border border-border rounded-md text-sm">
+                  <div className="text-textDim">
+                    <span className="text-text font-medium">
+                      {selectedDiffKeys.size}
+                    </span>{" "}
+                    selected
+                    {selectedDiffKeys.size >= MAX_DIFF_CREATIVES && (
+                      <span className="ml-1 text-xs">(max)</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDiffOpen(true)}
+                      disabled={
+                        selectedDiffKeys.size < MIN_DIFF_CREATIVES || diffOpen
+                      }
+                      className="px-3 py-1 rounded text-xs uppercase tracking-wider bg-accent text-text disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                      title={
+                        selectedDiffKeys.size < MIN_DIFF_CREATIVES
+                          ? "Select at least 2 creatives to compare"
+                          : diffOpen
+                            ? "Comparison is already open"
+                            : "Open comparison"
+                      }
+                    >
+                      Compare
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearDiffSelection}
+                      className="px-3 py-1 rounded text-xs uppercase tracking-wider text-textDim hover:text-text border border-border transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {diffOpen && selectedDiffItems.length >= MIN_DIFF_CREATIVES && (
+                <DiffPanel
+                  items={selectedDiffItems}
+                  onRemove={toggleDiffSelected}
+                  onClose={() => setDiffOpen(false)}
+                  hiddenCount={hiddenDiffCount}
+                />
+              )}
+
               <CreativesTable
                 creatives={creatives}
                 thresholds={thresholds}
@@ -562,6 +691,11 @@ export default function DashboardPage() {
                 rplOverrides={rplOverrides}
                 matchOverrides={matchOverrides}
                 onMatchOverridesChange={setMatchOverrides}
+                selectedKeys={selectedDiffKeys}
+                onToggleSelected={toggleDiffSelected}
+                selectionLimitReached={
+                  selectedDiffKeys.size >= MAX_DIFF_CREATIVES
+                }
               />
             </section>
           </div>

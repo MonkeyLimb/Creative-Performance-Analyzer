@@ -9,6 +9,9 @@ import {
   reportFilename,
   rowsToCsv,
 } from "@/lib/report";
+import { buildHtmlBrief } from "@/lib/brief";
+import { SlackBriefModal } from "./SlackBriefModal";
+import { HtmlBriefPicker } from "./HtmlBriefPicker";
 import { Thresholds } from "@/lib/types";
 
 type Props = {
@@ -19,6 +22,8 @@ type Props = {
 
 export function ExportMenu({ rows, summary, thresholds }: Props) {
   const [open, setOpen] = useState(false);
+  const [slackOpen, setSlackOpen] = useState(false);
+  const [htmlPickerOpen, setHtmlPickerOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +52,26 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
   const exportMarkdown = () => {
     const md = buildMarkdownReport(rows, summary, thresholds, new Date());
     downloadFile(reportFilename("md"), md, "text/markdown");
+    setOpen(false);
+  };
+
+  const exportHtmlBrief = () => {
+    const html = buildHtmlBrief(rows, summary, thresholds, new Date());
+    downloadFile(
+      reportFilename("html").replace("creative-report", "creative-brief"),
+      html,
+      "text/html",
+    );
+    setOpen(false);
+  };
+
+  const openSlackBrief = () => {
+    setSlackOpen(true);
+    setOpen(false);
+  };
+
+  const openHtmlPicker = () => {
+    setHtmlPickerOpen(true);
     setOpen(false);
   };
 
@@ -80,6 +105,7 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
   };
 
   return (
+    <>
     <div className="relative" ref={ref}>
       <button
         type="button"
@@ -97,6 +123,21 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
           role="menu"
           className="absolute right-0 mt-1.5 w-56 bg-surface border border-border rounded-md shadow-lg overflow-hidden z-20"
         >
+          <MenuItem
+            onClick={exportHtmlBrief}
+            title="Synthesized brief (HTML)"
+            hint="All schools · TL;DR, rollups, kill/scale"
+          />
+          <MenuItem
+            onClick={openHtmlPicker}
+            title="HTML brief by school…"
+            hint="Pick a partner for a scoped brief"
+          />
+          <MenuItem
+            onClick={openSlackBrief}
+            title="Slack / email brief"
+            hint="Preview, edit, copy to clipboard"
+          />
           <MenuItem
             onClick={exportCsv}
             title="CSV"
@@ -120,6 +161,22 @@ export function ExportMenu({ rows, summary, thresholds }: Props) {
         </div>
       )}
     </div>
+    {slackOpen && (
+      <SlackBriefModal
+        rows={rows}
+        summary={summary}
+        onClose={() => setSlackOpen(false)}
+      />
+    )}
+    {htmlPickerOpen && (
+      <HtmlBriefPicker
+        rows={rows}
+        summary={summary}
+        thresholds={thresholds}
+        onClose={() => setHtmlPickerOpen(false)}
+      />
+    )}
+    </>
   );
 }
 
