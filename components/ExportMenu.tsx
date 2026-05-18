@@ -10,6 +10,7 @@ import {
   rowsToCsv,
 } from "@/lib/report";
 import { buildHtmlBrief } from "@/lib/brief";
+import { buildHtmlFullReport } from "@/lib/full-report";
 import { fetchThumbnailUrls, urlsToDataUris } from "@/lib/asset-fetch";
 import { SlackBriefModal } from "./SlackBriefModal";
 import { HtmlBriefPicker } from "./HtmlBriefPicker";
@@ -123,6 +124,12 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
     setOpen(false);
   };
 
+  const exportFullReport = () => {
+    const html = buildHtmlFullReport(rows, new Date());
+    downloadFile(reportFilename("html"), html, "text/html");
+    setOpen(false);
+  };
+
   const openSlackBrief = () => {
     setSlackOpen(true);
     setOpen(false);
@@ -183,9 +190,14 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
           className="absolute right-0 mt-1.5 w-56 bg-surface border border-border rounded-md shadow-lg overflow-hidden z-20"
         >
           <MenuItem
+            onClick={exportFullReport}
+            title="Full creative report (HTML)"
+            hint="Active/inactive top-10s, best CPL, remove/retain lists"
+          />
+          <MenuItem
             onClick={exportHtmlBrief}
             title="Synthesized brief (HTML)"
-            hint="All schools · TL;DR, rollups, kill/scale"
+            hint="Shorter: TL;DR + kill/scale + hidden moves"
           />
           <MenuItem
             onClick={openHtmlPicker}
