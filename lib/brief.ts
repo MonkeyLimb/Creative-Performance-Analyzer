@@ -1,6 +1,7 @@
 import { ReportRow, ReportSummary } from "./report";
 import { TierStatus, Thresholds } from "./types";
 import { fmtCurrency, fmtNumber, fmtRoas } from "./format";
+import { parseExportFilename } from "./export-filename";
 
 // Briefs are bitesized and creative-first: lead with which ads to act on,
 // keep each list ≤ 5 entries, demote aggregate rollups to an appendix.
@@ -373,6 +374,7 @@ function esc(s: string | number | null | undefined): string {
 
 export type BriefOptions = {
   scopeLabel?: string;
+  csvFileName?: string;
 };
 
 export function buildHtmlBrief(
@@ -391,12 +393,19 @@ export function buildHtmlBrief(
   const losers = volumeLosers(rows, BRIEF_LIST_LIMIT);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
   const scope = options.scopeLabel;
+  const fileCtx = options.csvFileName
+    ? parseExportFilename(options.csvFileName)
+    : null;
+  const accountPrefix = fileCtx?.accountLabel ? `${fileCtx.accountLabel} · ` : "";
+  const dateLine = fileCtx?.rangeLabel
+    ? fileCtx.rangeLabel
+    : fmtDate(generatedAt);
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Creative Performance Brief${scope ? ` — ${esc(scope)}` : ""} — ${esc(fmtDate(generatedAt))}</title>
+<title>${esc(accountPrefix)}Creative Performance Brief${scope ? ` — ${esc(scope)}` : ""} — ${esc(dateLine)}</title>
 <style>
   :root {
     --ink: #1A1F2A;
@@ -461,8 +470,8 @@ export function buildHtmlBrief(
 </head>
 <body>
 
-<h1>Creative Performance Brief${scope ? ` <span style="color: var(--muted); font-weight: 500;">· ${esc(scope)}</span>` : ""}</h1>
-<div class="meta">Generated ${esc(fmtDate(generatedAt))} · ${esc(String(rows.length))} creatives${scope ? ` · scoped to ${esc(scope)}` : ""}</div>
+<h1>${esc(accountPrefix)}Creative Performance Brief${scope ? ` <span style="color: var(--muted); font-weight: 500;">· ${esc(scope)}</span>` : ""}</h1>
+<div class="meta">${fileCtx?.rangeLabel ? `Reporting period: ${esc(fileCtx.rangeLabel)}` : `Generated ${esc(fmtDate(generatedAt))}`} · ${esc(String(rows.length))} creatives${scope ? ` · scoped to ${esc(scope)}` : ""}${fileCtx?.rawFilename ? ` · source: ${esc(fileCtx.rawFilename)}` : ""}</div>
 
 <div class="tldr">
 ${tldr.map((line) => `  <p>${esc(line)}</p>`).join("\n")}
@@ -584,11 +593,16 @@ export function buildSlackBrief(
   const losers = volumeLosers(rows, 3);
   const totalWasted = cuts.reduce((s, c) => s + c.wasted, 0);
   const scope = options.scopeLabel;
+  const fileCtx = options.csvFileName
+    ? parseExportFilename(options.csvFileName)
+    : null;
+  const accountPrefix = fileCtx?.accountLabel ? `${fileCtx.accountLabel} · ` : "";
+  const dateLine = fileCtx?.rangeLabel ?? fmtDate(generatedAt);
   const SEP = "─".repeat(28);
 
   const out: string[] = [];
   out.push(
-    `*Creative Performance Brief*${scope ? ` · ${scope}` : ""} — ${fmtDate(generatedAt)}`,
+    `*${accountPrefix}Creative Performance Brief*${scope ? ` · ${scope}` : ""} — ${dateLine}`,
   );
   out.push("");
   for (const line of tldr) out.push(line);

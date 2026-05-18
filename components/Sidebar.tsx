@@ -23,6 +23,7 @@ type Props = {
   onTopNChange: (t: TopN) => void;
   csvText: string;
   onCsvTextChange: (t: string) => void;
+  onCsvFileNameChange?: (name: string) => void;
   onAnalyze: () => void;
   parseError: string | null;
   onClearData: () => void;
@@ -48,6 +49,7 @@ export function Sidebar({
   onTopNChange,
   csvText,
   onCsvTextChange,
+  onCsvFileNameChange,
   onAnalyze,
   parseError,
   onClearData,
@@ -67,10 +69,14 @@ export function Sidebar({
   const onFilePick = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const name = file.name;
     const reader = new FileReader();
     reader.onload = () => {
       const text = typeof reader.result === "string" ? reader.result : "";
-      if (text) onCsvTextChange(text);
+      if (text) {
+        onCsvTextChange(text);
+        onCsvFileNameChange?.(name);
+      }
     };
     reader.readAsText(file);
     e.target.value = "";

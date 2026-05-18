@@ -12,10 +12,11 @@ import { ReportRow, ReportSummary } from "@/lib/report";
 type Props = {
   rows: ReportRow[];
   summary: ReportSummary;
+  csvFileName?: string;
   onClose: () => void;
 };
 
-export function SlackBriefModal({ rows, summary, onClose }: Props) {
+export function SlackBriefModal({ rows, summary, csvFileName, onClose }: Props) {
   const schools = useMemo(() => availableSchools(rows), [rows]);
   const [school, setSchool] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState(() => new Date());
@@ -30,10 +31,11 @@ export function SlackBriefModal({ rows, summary, onClose }: Props) {
       const filtered = filterRowsBySchool(rows, school);
       return buildSlackBrief(filtered, recomputeSummary(filtered), generatedAt, {
         scopeLabel: `${school} only`,
+        csvFileName,
       });
     }
-    return buildSlackBrief(rows, summary, generatedAt);
-  }, [rows, summary, school, generatedAt]);
+    return buildSlackBrief(rows, summary, generatedAt, { csvFileName });
+  }, [rows, summary, school, generatedAt, csvFileName]);
 
   // Resetting the edited buffer when the scope changes keeps the textarea
   // in sync with the user's school pick unless they've started editing.
