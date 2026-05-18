@@ -15,10 +15,17 @@ type Props = {
   rows: ReportRow[];
   summary: ReportSummary;
   thresholds: Thresholds;
+  csvFileName?: string;
   onClose: () => void;
 };
 
-export function HtmlBriefPicker({ rows, summary, thresholds, onClose }: Props) {
+export function HtmlBriefPicker({
+  rows,
+  summary,
+  thresholds,
+  csvFileName,
+  onClose,
+}: Props) {
   const schools = useMemo(() => availableSchools(rows), [rows]);
   const [school, setSchool] = useState<string | null>(null);
 
@@ -35,6 +42,7 @@ export function HtmlBriefPicker({ rows, summary, thresholds, onClose }: Props) {
     const sum = school ? recomputeSummary(scoped) : summary;
     const html = buildHtmlBrief(scoped, sum, thresholds, new Date(), {
       scopeLabel: school ? `${school} only` : undefined,
+      csvFileName,
     });
     const stem = school ? `creative-brief-${slug(school)}` : "creative-brief";
     downloadFile(

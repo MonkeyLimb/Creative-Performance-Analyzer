@@ -87,6 +87,7 @@ export default function DashboardPage() {
   const [account, setAccount] = useState<AdAccount>({ actId: "" });
   const [metaToken, setMetaToken] = useState<string>("");
   const [csvText, setCsvText] = useState<string>(SAMPLE_CSV);
+  const [csvFileName, setCsvFileName] = useState<string>("");
   const [creatives, setCreatives] = useState<Creative[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [tierFilter, setTierFilter] = useState<TierStatus | "all">("all");
@@ -205,6 +206,7 @@ export default function DashboardPage() {
     setCreatives(null);
     setParseError(null);
     setToast(null);
+    setCsvFileName("");
     creativeStore.clear();
     setSelectedDiffKeys(new Set());
     setDiffOpen(false);
@@ -449,6 +451,7 @@ export default function DashboardPage() {
         onTopNChange={setTopN}
         csvText={csvText}
         onCsvTextChange={setCsvText}
+        onCsvFileNameChange={setCsvFileName}
         onAnalyze={handleAnalyze}
         parseError={parseError}
         onClearData={handleClear}
@@ -511,6 +514,7 @@ export default function DashboardPage() {
                 summary={reportSummary}
                 thresholds={thresholds}
                 metaToken={metaToken}
+                csvFileName={csvFileName}
               />
             </header>
 

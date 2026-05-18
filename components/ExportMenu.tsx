@@ -21,9 +21,16 @@ type Props = {
   summary: ReportSummary;
   thresholds: Thresholds;
   metaToken: string;
+  csvFileName?: string;
 };
 
-export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
+export function ExportMenu({
+  rows,
+  summary,
+  thresholds,
+  metaToken,
+  csvFileName,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [slackOpen, setSlackOpen] = useState(false);
   const [htmlPickerOpen, setHtmlPickerOpen] = useState(false);
@@ -115,7 +122,9 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
   };
 
   const exportHtmlBrief = () => {
-    const html = buildHtmlBrief(rows, summary, thresholds, new Date());
+    const html = buildHtmlBrief(rows, summary, thresholds, new Date(), {
+      csvFileName,
+    });
     downloadFile(
       reportFilename("html").replace("creative-report", "creative-brief"),
       html,
@@ -125,7 +134,7 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
   };
 
   const exportFullReport = () => {
-    const html = buildHtmlFullReport(rows, new Date());
+    const html = buildHtmlFullReport(rows, new Date(), { csvFileName });
     downloadFile(reportFilename("html"), html, "text/html");
     setOpen(false);
   };
@@ -256,6 +265,7 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
       <SlackBriefModal
         rows={rows}
         summary={summary}
+        csvFileName={csvFileName}
         onClose={() => setSlackOpen(false)}
       />
     )}
@@ -264,6 +274,7 @@ export function ExportMenu({ rows, summary, thresholds, metaToken }: Props) {
         rows={rows}
         summary={summary}
         thresholds={thresholds}
+        csvFileName={csvFileName}
         onClose={() => setHtmlPickerOpen(false)}
       />
     )}
